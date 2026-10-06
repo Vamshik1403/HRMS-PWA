@@ -8,7 +8,8 @@ import { cn } from "@/app/utils/cn";
 import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager";
 import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
-import { COMPANY_HUB_TILES } from "@/app/my-company/hubs";
+import { COMPANY_HUB_TILES, filterCompanyHubTiles } from "@/app/my-company/hubs";
+import { isHubTabAllowed, useProductAccess } from "@/lib/productAccess";
 import { buildNavContext, filterNavigation } from "./hrms-navigation";
 
 interface SearchHit {
@@ -29,6 +30,7 @@ export function GlobalNavSearch({
 } = {}) {
   const router = useRouter();
   const user = useCurrentUser();
+  const productAccess = useProductAccess();
   const inputRef = useRef<HTMLInputElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
@@ -45,16 +47,16 @@ export function GlobalNavSearch({
     );
     if (!isCompanyAdminLikeRole(user.role)) return navItems;
 
-    const tileItems = COMPANY_HUB_TILES.filter((tile) =>
-      tile.tabs.some((tab) => !tab.comingSoon),
-    ).map((tile) => ({
+    const tileItems = filterCompanyHubTiles(COMPANY_HUB_TILES, isHubTabAllowed)
+      .filter((tile) => tile.tabs.some((tab) => !tab.comingSoon))
+      .map((tile) => ({
       label: tile.label,
       href: `/my-company/${tile.id}`,
       group: "Modules",
     }));
     const withoutLauncher = navItems.filter((item) => item.href !== "/my-company");
     return [...tileItems, ...withoutLauncher];
-  }, [user]);
+  }, [user, productAccess]);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();

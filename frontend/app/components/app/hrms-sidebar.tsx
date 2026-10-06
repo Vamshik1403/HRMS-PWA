@@ -6,6 +6,7 @@ import { SidebarBrand } from "./sidebar-brand";
 import { SidebarNavGroup } from "./sidebar-nav-group";
 import { filterNavigation, buildNavContext, type NavContext } from "./hrms-navigation";
 import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
+import { useProductAccess } from "@/lib/productAccess";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +38,7 @@ export function HrmsSidebar({
   showCompanySwitcher,
 }: HrmsSidebarProps) {
   const pathname = usePathname();
+  useProductAccess();
   const groups = filterNavigation(navContext);
 
   return (

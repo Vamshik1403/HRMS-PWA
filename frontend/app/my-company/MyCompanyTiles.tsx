@@ -5,9 +5,12 @@ import { Icon } from "@iconify/react";
 import { Building2 } from "lucide-react";
 import { PageHeader } from "@/app/components/app/page-header";
 import { cn } from "@/app/utils/cn";
-import { COMPANY_HUB_TILES } from "./hubs";
+import { isHubTabAllowed, useProductAccess } from "@/lib/productAccess";
+import { COMPANY_HUB_TILES, filterCompanyHubTiles } from "./hubs";
 
 export function MyCompanyTiles() {
+  useProductAccess();
+  const tiles = filterCompanyHubTiles(COMPANY_HUB_TILES, isHubTabAllowed);
   return (
     <div className="page-content-enter w-full max-w-none animate-fade-in space-y-6">
       <PageHeader
@@ -16,7 +19,7 @@ export function MyCompanyTiles() {
         description="Open a module from the tile menu, then use its tabs."
       />
       <div className="grid w-full grid-cols-9 justify-items-center gap-x-4 gap-y-8 px-1 py-2">
-        {COMPANY_HUB_TILES.map((tile, index) => (
+        {tiles.map((tile, index) => (
           <Link
             key={tile.id}
             href={`/my-company/${tile.id}`}

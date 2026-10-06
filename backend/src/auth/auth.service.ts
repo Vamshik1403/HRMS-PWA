@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -20,10 +19,10 @@ import {
   VerifyLoginOtpDto,
   ResendLoginOtpDto,
 } from './dto/forgot-password.dto';
-import { AuthOtpPurpose, SubscriptionStatus } from '@prisma/client';
+import { AuthOtpPurpose } from '@prisma/client';
+import { CompanyModuleAccessService } from '../common/company-module-access.service';
 import { assertPasswordMeetsPolicy } from './password-policy';
 
-const SUBSCRIPTION_EXEMPT_ROLES = ['SUPERADMIN', 'SERVICE_PROVIDER'];
 const EMAIL_NOT_FOUND_MSG =
   'Wrong email address or email not found. Contact your administrator.';
 const LOGIN_OTP_TTL_MS = 5 * 60 * 1000;
@@ -38,6 +37,7 @@ export class AuthService {
     private prisma: PrismaService,
     private auditLog: AuditLogService,
     private mail: MailService,
+    private moduleAccess: CompanyModuleAccessService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -90,16 +90,13 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const companyIDForCheck =
-      userType === 'user' ? user.companyID : user.companyID;
+    const companyIDForCheck = user.companyID;
     const roleForCheck = userType === 'user' ? user.role : 'EMPLOYEE';
-    if (!SUBSCRIPTION_EXEMPT_ROLES.includes(roleForCheck) && companyIDForCheck) {
-      try {
-        await this.assertCompanySubscriptionActive(companyIDForCheck);
-      } catch (err) {
-        await logFailed('Subscription expired');
-        throw err;
-      }
+    try {
+      await this.moduleAccess.assertLoginAllowed(companyIDForCheck, roleForCheck);
+    } catch (err) {
+      await logFailed('Subscription blocked');
+      throw err;
     }
 
     const isDesktopClient = dto.client !== 'mobile';
@@ -391,24 +388,8 @@ export class AuthService {
     return { ok: true };
   }
 
-  async assertCompanySubscriptionActive(companyID?: number | null) {
-    if (!companyID) return;
-
-    const latest = await this.prisma.companySubscription.findFirst({
-      where: { companyID },
-      orderBy: { endDate: 'desc' },
-    });
-
-    if (!latest) return;
-
-    const expired =
-      latest.status === SubscriptionStatus.EXPIRED ||
-      latest.status === SubscriptionStatus.CANCELLED ||
-      new Date(latest.endDate).getTime() < Date.now();
-
-    if (expired) {
-      throw new ForbiddenException('SUBSCRIPTION_EXPIRED');
-    }
+  async assertCompanySubscriptionActive(companyID?: number | null, role?: string | null) {
+    await this.moduleAccess.assertLoginAllowed(companyID, role);
   }
 
   async validateUser(payload: any) {
@@ -506,6 +487,7 @@ export class AuthService {
         serviceProviderID: user.serviceProviderID,
         companyID: user.companyID,
         branchesID: user.branchesID,
+        isCompanyOwner: !!user.employee?.isCompanyOwner,
       };
       userData = {
         id: user.employeeID,

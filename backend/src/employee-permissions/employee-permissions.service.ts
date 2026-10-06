@@ -12,7 +12,7 @@ import {
   hasModuleAction,
   type ModulePermissionDto,
 } from '../common/company-module-permissions';
-import { loadEmployeePermissions } from '../common/employee-permission.util';
+import { entitledRightsKeys, loadEmployeePermissions } from '../common/employee-permission.util';
 
 type Actor = {
   manageEmployeeId: number;
@@ -27,8 +27,33 @@ export class EmployeePermissionsService {
     private jwt: JwtService,
   ) {}
 
-  listModules() {
-    return COMPANY_MODULE_KEYS.map((moduleKey) => ({
+  async resolveModulesCompany(req: Request, companyIdQuery?: string): Promise<number | null> {
+    const token = this.extractToken(req);
+    if (!token) throw new UnauthorizedException('Not authenticated');
+    let payload: any;
+    try {
+      payload = this.jwt.verify(token, {
+        secret: process.env.JWT_SECRET || 'secret123',
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid token');
+    }
+    if (payload?.type === 'employee') {
+      const actor = await this.resolveActor(req);
+      return actor.companyId;
+    }
+    const id = Number(companyIdQuery);
+    if (Number.isFinite(id) && id > 0) return id;
+    if (payload?.role) return null;
+    throw new ForbiddenException('Only employee accounts can manage rights');
+  }
+
+  async listModules(companyId: number | null) {
+    const entitled = companyId ? await entitledRightsKeys(this.prisma, companyId) : null;
+    const keys = entitled
+      ? COMPANY_MODULE_KEYS.filter((moduleKey) => entitled.has(moduleKey))
+      : COMPANY_MODULE_KEYS;
+    return keys.map((moduleKey) => ({
       moduleKey,
       label: moduleKey
         .split('_')
@@ -192,7 +217,8 @@ export class EmployeePermissionsService {
     });
     if (!target) throw new BadRequestException('Employee not found in this company');
 
-    const allowed = new Set(COMPANY_MODULE_KEYS as readonly string[]);
+    const entitled = await entitledRightsKeys(this.prisma, actor.companyId);
+    const allowed = entitled ?? new Set<string>(COMPANY_MODULE_KEYS);
     await this.prisma.$transaction(async (tx) => {
       for (const row of permissions) {
         if (!allowed.has(row.moduleKey)) continue;

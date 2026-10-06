@@ -84,7 +84,7 @@ export default function LoginPage() {
         setError(
           msg
             ? decodeURIComponent(msg)
-            : 'Your company subscription has expired. Please contact your administrator to renew it.',
+            : "Your subscription has expired. Please contact the application's administrator.",
         )
         window.history.replaceState({}, '', '/login')
       }
@@ -176,6 +176,12 @@ export default function LoginPage() {
 
     localStorage.setItem('accessToken', accessToken)
     localStorage.setItem('token', accessToken)
+    try {
+      const { refreshProductAccess } = await import('@/lib/productAccess')
+      await refreshProductAccess(accessToken)
+    } catch {
+      /* the app shell refreshes access as well */
+    }
     setAccessTokenCookie(accessToken)
 
     if (basicUser.type === 'employee' || basicUser.role === 'EMPLOYEE') {
@@ -350,7 +356,9 @@ export default function LoginPage() {
       console.error(err)
       const serverMsg = err.response?.data?.message
       if (serverMsg === 'SUBSCRIPTION_EXPIRED') {
-        setError('Your company subscription has expired. Please contact your administrator to renew it.')
+        setError("Your subscription has expired. Please contact the application's administrator.")
+      } else if (serverMsg === 'NO_ACTIVE_SUBSCRIPTION') {
+        setError("No subscription added or assigned. Contact the application's administrator.")
       } else {
         setError(apiMessage(err, 'Invalid username or password'))
       }

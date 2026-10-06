@@ -7,7 +7,8 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Building2 } from "lucide-react";
 import { PageHeader } from "@/app/components/app/page-header";
 import { cn } from "@/app/utils/cn";
-import { getCompanyHub, type CompanyHubTab } from "../hubs";
+import { isHubTabAllowed, useProductAccess } from "@/lib/productAccess";
+import { filterCompanyHubTiles, getCompanyHub, type CompanyHubTab } from "../hubs";
 
 const EmpCompanyDashboard = dynamic(
   () =>
@@ -204,11 +205,26 @@ function HubEmbed({ tab }: { tab: CompanyHubTab }) {
 function CompanyHubPageInner() {
   const params = useParams();
   const searchParams = useSearchParams();
-  const hub = getCompanyHub(String(params.hub || ""));
-  if (!hub) {
+  useProductAccess();
+  const source = getCompanyHub(String(params.hub || ""));
+  const hub = source
+    ? filterCompanyHubTiles([source], isHubTabAllowed)[0] ?? null
+    : null;
+  if (!source) {
     return (
       <div className="p-8 text-sm text-muted-foreground">
         Unknown module.{" "}
+        <Link href="/my-company" className="text-primary underline">
+          Back to My Company
+        </Link>
+      </div>
+    );
+  }
+
+  if (!hub) {
+    return (
+      <div className="p-8 text-sm text-muted-foreground">
+        This module is not included in your company&apos;s subscription.{" "}
         <Link href="/my-company" className="text-primary underline">
           Back to My Company
         </Link>

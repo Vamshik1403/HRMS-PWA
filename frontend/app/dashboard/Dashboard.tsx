@@ -544,7 +544,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
 
   const loadTodayOverview = async () => {
     const gen = ++overviewLoadGen.current;
-    setOverviewLoading(true);
+      setOverviewLoading(true);
     setOverviewLoadError(false);
     try {
       const qs = overviewQueryParams.toString();
@@ -562,7 +562,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
       setOverviewLoadError(true);
     } finally {
       if (gen === overviewLoadGen.current) {
-        setOverviewLoading(false);
+      setOverviewLoading(false);
       }
     }
   };
@@ -820,7 +820,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
     return Math.round((delta / employees.length) * 1000) / 10;
   }, [presentCount, yesterdayPresent, employees.length]);
 
- 
+
   const filterDepartments = useMemo(() => {
     if (!selectedBranchId) return departments;
     const branchNum = Number(selectedBranchId);
@@ -1063,7 +1063,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
     );
   }
 
-   const attRate =
+  const attRate =
     overviewTotal > 0
       ? Math.round((overviewPresent / overviewTotal) * 1000) / 10
       : 0;
@@ -1115,9 +1115,9 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
   if (isCompanyAdminLikeRole(user?.role)) {
     const newJoinersCount = hrWidgets?.newJoinersThisMonth ?? 0;
 
-    return (
+  return (
       <div className="animate-fade-in">
-        {probationAlerts.length > 0 && (
+      {probationAlerts.length > 0 && (
           <div className="mb-6">
             <NoticeBanner
               variant="warning"
@@ -1138,7 +1138,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
                 ))}
               </ul>
             </NoticeBanner>
-          </div>
+            </div>
         )}
         <CompanyAdminEnterpriseDashboard
           firstName={user?.firstName || user?.username || "Company Admin"}
@@ -1164,7 +1164,7 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
           activityItems={activityItems}
           pendingCounts={hrWidgets?.pendingCounts ?? null}
         />
-      </div>
+          </div>
     );
   }
 
@@ -1347,13 +1347,13 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
             <div className="rounded-xl bg-muted/30 p-5 sm:p-6 mb-6">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
                 Workforce distribution
-              </p>
-              <EmployeeStatusCharts
-                total={overviewTotal}
-                present={overviewPresent}
-                absent={absentCount}
-                statusBreakdown={statusBreakdown}
-              />
+                </p>
+                <EmployeeStatusCharts
+                  total={overviewTotal}
+                  present={overviewPresent}
+                  absent={absentCount}
+                  statusBreakdown={statusBreakdown}
+                />
             </div>
 
             {isHrDesktopView && (
@@ -1491,33 +1491,33 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
             <h2 className={`${panelTitle} mb-3 shrink-0`}>Recent activity</h2>
             <div className="flex-1 flex flex-col min-h-0">
               <ActivityFeed items={activityItems} fillHeight />
-            </div>
+              </div>
           </section>
 
           {isHrDesktopView && (
             <section className={`${cardShell} p-5 flex flex-col flex-1 min-h-[9rem]`}>
               <h2 className={`${panelTitle} mb-3 shrink-0`}>Task list</h2>
               <div className="flex-1 flex flex-col min-h-0">
-                {hrWidgets?.latestTasks?.length ? (
+              {hrWidgets?.latestTasks?.length ? (
                   <ul className="space-y-2 flex-1 overflow-y-auto min-h-0">
-                    {hrWidgets.latestTasks.map((t) => (
-                      <li key={t.id}>
+                  {hrWidgets.latestTasks.map((t) => (
+                    <li key={t.id}>
                         <Link href="/task-projects" className={listItemClass}>
                           <p className="text-xs font-semibold text-foreground leading-snug whitespace-normal break-words">
-                            {t.taskCode} — {t.taskName}
-                          </p>
+                          {t.taskCode} — {t.taskName}
+                        </p>
                           <p className="text-[11px] text-muted-foreground mt-0.5">
-                            {t.status} · {t.priority}
-                          </p>
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
+                          {t.status} · {t.priority}
+                        </p>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
                   <div className="flex-1 flex items-center justify-center">
                     <p className="text-sm text-muted-foreground">No tasks to show</p>
                   </div>
-                )}
+              )}
               </div>
             </section>
           )}
@@ -1528,31 +1528,31 @@ export default function DashboardPage({ embeddedInEmpPortal = false }: { embedde
                 Upcoming birthdays &amp; anniversary
               </h2>
               <div className="flex-1 flex flex-col min-h-0">
-                {hrWidgets?.upcomingEvents?.length ? (
+              {hrWidgets?.upcomingEvents?.length ? (
                   <ul className="space-y-2 flex-1 overflow-y-auto min-h-0">
-                    {hrWidgets.upcomingEvents.map((ev) => (
-                      <li
-                        key={ev.id}
+                  {hrWidgets.upcomingEvents.map((ev) => (
+                    <li
+                      key={ev.id}
                         className="flex items-start gap-2.5 rounded-lg border border-border bg-background px-3 py-2.5"
-                      >
-                        <Icon
-                          icon={ev.kind === "birthday" ? "mdi:cake-variant" : "mdi:medal"}
+                    >
+                      <Icon
+                        icon={ev.kind === "birthday" ? "mdi:cake-variant" : "mdi:medal"}
                           className="w-4 h-4 text-primary shrink-0 mt-0.5"
-                        />
-                        <div className="min-w-0 flex-1">
+                      />
+                      <div className="min-w-0 flex-1">
                           <p className="text-xs font-semibold text-foreground leading-snug whitespace-normal break-words">
-                            {ev.label}
-                          </p>
+                          {ev.label}
+                        </p>
                           <p className="text-[11px] text-muted-foreground capitalize mt-0.5">{ev.kind} · {ev.when}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
                   <div className="flex-1 flex items-center justify-center">
                     <p className="text-sm text-muted-foreground">No upcoming events</p>
                   </div>
-                )}
+              )}
               </div>
             </section>
           )}

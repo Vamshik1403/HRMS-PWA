@@ -15,8 +15,9 @@ export class EmployeePermissionsController {
   constructor(private readonly service: EmployeePermissionsService) {}
 
   @Get('modules')
-  listModules() {
-    return this.service.listModules();
+  async listModules(@Req() req: Request, @Query('companyId') companyId?: string) {
+    const resolved = await this.service.resolveModulesCompany(req, companyId);
+    return this.service.listModules(resolved);
   }
 
   @Get('me')

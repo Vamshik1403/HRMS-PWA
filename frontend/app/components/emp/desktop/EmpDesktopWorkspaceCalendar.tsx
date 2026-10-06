@@ -31,6 +31,7 @@ import { useCurrentUser } from "@/app/hooks/useCurrentUser";
 import { taskFetch } from "@/app/utils/taskApi";
 import { cn } from "@/app/utils/cn";
 import { todoTextsByDate } from "@/app/utils/empCalendarTodos";
+import { canViewProductModule, useProductAccess } from "@/lib/productAccess";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -168,6 +169,12 @@ const DAY_DETAIL_TABS: {
 
 export function EmpDesktopWorkspaceCalendar() {
   const user = useCurrentUser();
+  useProductAccess();
+  const showTaskSections =
+    canViewProductModule("TASK_MODULE") || canViewProductModule("ONFIELD_TASK_MODULE");
+  const dayDetailTabs = DAY_DETAIL_TABS.filter(
+    (tab) => showTaskSections || (tab.id !== "sites" && tab.id !== "tasks"),
+  );
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth() + 1);
@@ -187,6 +194,12 @@ export function EmpDesktopWorkspaceCalendar() {
   const monthInputRef = useRef<HTMLInputElement>(null);
 
   const todayKey = todayPunchDateKey();
+
+  useEffect(() => {
+    if (!showTaskSections && (dayDetailSection === "sites" || dayDetailSection === "tasks")) {
+      setDayDetailSection("punches");
+    }
+  }, [dayDetailSection, showTaskSections]);
 
   const refreshTodosByDate = useCallback(() => {
     const empId = Number(user?.employee?.id ?? 0) || 0;
@@ -562,7 +575,7 @@ export function EmpDesktopWorkspaceCalendar() {
                 role="tablist"
                 aria-label="Day detail sections"
               >
-                {DAY_DETAIL_TABS.map((tab) => {
+                {dayDetailTabs.map((tab) => {
                   const Icon = tab.icon;
                   const active = dayDetailSection === tab.id;
                   return (

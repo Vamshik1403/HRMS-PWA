@@ -20,6 +20,7 @@ import { EmpDesktopPage } from "./EmpDesktopPage";
 import type { TodayStatus } from "../../../hooks/useEmpPunch";
 import { TASK_MANAGEMENT_ENABLED } from "../../../config/featureFlags";
 import { canViewModule } from "@/lib/companyAccess";
+import { isProductHrefAllowed, useProductAccess } from "@/lib/productAccess";
 import { useEmpManagerScope } from "../../../hooks/useEmpManagerScope";
 
 const quickLinks = [
@@ -68,6 +69,7 @@ export function EmpDesktopHomeOverview({
   onNoticeClick?: () => void;
 }) {
   const { isManagerView } = useEmpManagerScope();
+  useProductAccess();
 
   const badgeFor = useCallback(
     (key: string) => {
@@ -81,10 +83,9 @@ export function EmpDesktopHomeOverview({
   );
 
   const tasksLink = tasksQuickLink();
-  const quickAccessItems = [
-    ...quickLinks,
-    ...(tasksLink ? [tasksLink] : []),
-  ];
+  const quickAccessItems = [...quickLinks, ...(tasksLink ? [tasksLink] : [])].filter((item) =>
+    isProductHrefAllowed(item.href),
+  );
 
   return (
     <EmpDesktopPage

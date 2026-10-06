@@ -19,6 +19,7 @@ import {
   EmpTeamMemberPromotions,
 } from "../EmpTeamMemberSections";
 import { Icon } from "@iconify/react";
+import { canViewProductModule, useProductAccess } from "@/lib/productAccess";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -59,6 +60,7 @@ function scrollMemberWorkspaceToTop() {
 function EmpDesktopTeamMemberWorkspaceInner() {
   const params = useParams();
   const searchParams = useSearchParams();
+  useProductAccess();
   const employeeId = Number(params.id);
   const activeTab = resolveMemberTab(searchParams);
   const [employeeName, setEmployeeName] = useState("Employee profile");
@@ -101,14 +103,30 @@ function EmpDesktopTeamMemberWorkspaceInner() {
     { id: "profile", label: "Profile", href: memberTabHref(employeeId, "profile") },
     { id: "attendance", label: "Attendance", href: memberTabHref(employeeId, "attendance") },
     { id: "work-report", label: "Work Report", href: memberTabHref(employeeId, "work-report") },
-    { id: "leave", label: "Leave", href: memberTabHref(employeeId, "leave") },
-    { id: "reimbursement", label: "Reimbursement", href: memberTabHref(employeeId, "reimbursement") },
-    { id: "regularisation", label: "Regularisation", href: memberTabHref(employeeId, "regularisation") },
-    { id: "payslips", label: "Payslips", href: memberTabHref(employeeId, "payslips") },
-    { id: "salary-advance", label: "Loans & Advances", href: memberTabHref(employeeId, "salary-advance") },
-    { id: "messaging", label: "IM", href: memberTabHref(employeeId, "messaging") },
-    { id: "holidays", label: "My Holidays", href: memberTabHref(employeeId, "holidays") },
-    { id: "promotions", label: "Promotions & Transfer", href: memberTabHref(employeeId, "promotions") },
+    ...(canViewProductModule("LEAVE_MODULE")
+      ? [{ id: "leave", label: "Leave", href: memberTabHref(employeeId, "leave") }]
+      : []),
+    ...(canViewProductModule("REIMBURSEMENT_MODULE")
+      ? [{ id: "reimbursement", label: "Reimbursement", href: memberTabHref(employeeId, "reimbursement") }]
+      : []),
+    ...(canViewProductModule("REGULARISATION_MODULE")
+      ? [{ id: "regularisation", label: "Regularisation", href: memberTabHref(employeeId, "regularisation") }]
+      : []),
+    ...(canViewProductModule("PAYSLIP_MODULE")
+      ? [{ id: "payslips", label: "Payslips", href: memberTabHref(employeeId, "payslips") }]
+      : []),
+    ...(canViewProductModule("LOAN_ADVANCE_MODULE")
+      ? [{ id: "salary-advance", label: "Loans & Advances", href: memberTabHref(employeeId, "salary-advance") }]
+      : []),
+    ...(canViewProductModule("IM_MODULE")
+      ? [{ id: "messaging", label: "IM", href: memberTabHref(employeeId, "messaging") }]
+      : []),
+    ...(canViewProductModule("HOLIDAY_MODULE")
+      ? [{ id: "holidays", label: "My Holidays", href: memberTabHref(employeeId, "holidays") }]
+      : []),
+    ...(canViewProductModule("PROMOTIONS_MODULE") || canViewProductModule("TRANSFERS_MODULE")
+      ? [{ id: "promotions", label: "Promotions & Transfer", href: memberTabHref(employeeId, "promotions") }]
+      : []),
   ];
 
   return (
@@ -121,16 +139,31 @@ function EmpDesktopTeamMemberWorkspaceInner() {
         )}
         {activeTab === "attendance" && <EmpProfileAttendanceView employeeId={employeeId} />}
         {activeTab === "work-report" && <EmpProfileWorkReportView employeeId={employeeId} />}
-        {activeTab === "leave" && <EmpTeamMemberLeave employeeId={employeeId} />}
-        {activeTab === "reimbursement" && <EmpTeamMemberReimbursement employeeId={employeeId} />}
-        {activeTab === "regularisation" && (
+        {activeTab === "leave" && canViewProductModule("LEAVE_MODULE") && (
+          <EmpTeamMemberLeave employeeId={employeeId} />
+        )}
+        {activeTab === "reimbursement" && canViewProductModule("REIMBURSEMENT_MODULE") && (
+          <EmpTeamMemberReimbursement employeeId={employeeId} />
+        )}
+        {activeTab === "regularisation" && canViewProductModule("REGULARISATION_MODULE") && (
           <EmpProfileRegularisationView employeeId={employeeId} />
         )}
-        {activeTab === "payslips" && <EmpTeamMemberPayslips employeeId={employeeId} />}
-        {activeTab === "salary-advance" && <EmpTeamMemberSalaryAdvances employeeId={employeeId} />}
-        {activeTab === "messaging" && <EmpTeamMemberMessaging employeeId={employeeId} />}
-        {activeTab === "holidays" && <EmpHolidayListMobile embedded />}
-        {activeTab === "promotions" && <EmpTeamMemberPromotions employeeId={employeeId} />}
+        {activeTab === "payslips" && canViewProductModule("PAYSLIP_MODULE") && (
+          <EmpTeamMemberPayslips employeeId={employeeId} />
+        )}
+        {activeTab === "salary-advance" && canViewProductModule("LOAN_ADVANCE_MODULE") && (
+          <EmpTeamMemberSalaryAdvances employeeId={employeeId} />
+        )}
+        {activeTab === "messaging" && canViewProductModule("IM_MODULE") && (
+          <EmpTeamMemberMessaging employeeId={employeeId} />
+        )}
+        {activeTab === "holidays" && canViewProductModule("HOLIDAY_MODULE") && (
+          <EmpHolidayListMobile embedded />
+        )}
+        {activeTab === "promotions" &&
+          (canViewProductModule("PROMOTIONS_MODULE") || canViewProductModule("TRANSFERS_MODULE")) && (
+            <EmpTeamMemberPromotions employeeId={employeeId} />
+          )}
       </div>
     </EmpDesktopPage>
   );

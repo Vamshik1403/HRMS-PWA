@@ -21,7 +21,12 @@ import {
   ownerTitleForLegalEntity,
   type ModulePermissionDto,
 } from '../common/company-module-permissions';
-import { loadEmployeePermissions } from '../common/employee-permission.util';
+import {
+  entitledRightsKeys,
+  limitPermissionsToPlan,
+  loadEmployeePermissions,
+} from '../common/employee-permission.util';
+import { PRODUCT_MODULE_CATALOG } from '../common/product-modules';
 import {
   getMutuallyLinkedCompanyIds,
   normalizeFederalDomainCode,
@@ -516,8 +521,9 @@ export class CompanyService {
     const joiningDate =
       dto.joiningDate?.trim() ||
       new Date().toISOString().slice(0, 10);
+    const entitled = await entitledRightsKeys(this.prisma, companyId);
     const permissions = isCompanyOwner
-      ? this.mapPermissionRows(dto.permissions)
+      ? limitPermissionsToPlan(this.mapPermissionRows(dto.permissions), entitled)
       : [];
 
     let created;
@@ -740,11 +746,12 @@ export class CompanyService {
       }
 
       if (dto.permissions) {
+        const entitled = await entitledRightsKeys(this.prisma, companyId);
         await this.persistModulePermissions(
           tx,
           companyId,
           owner.id,
-          this.mapPermissionRows(dto.permissions),
+          limitPermissionsToPlan(this.mapPermissionRows(dto.permissions), entitled),
         );
       }
     });
@@ -820,12 +827,13 @@ export class CompanyService {
     });
     if (!owner) throw new NotFoundException('Company owner not found');
 
+    const entitled = await entitledRightsKeys(this.prisma, companyId);
     await this.prisma.$transaction(async (tx) => {
       await this.persistModulePermissions(
         tx,
         companyId,
         owner.id,
-        this.mapPermissionRows(permissions),
+        limitPermissionsToPlan(this.mapPermissionRows(permissions), entitled),
       );
     });
 
@@ -978,21 +986,7 @@ export class CompanyService {
   }
 
   async seedDefaultModules() {
-    const modules = [
-      { moduleKey: 'ATTENDANCE_MODULE', moduleName: 'Attendance', sortOrder: 1 },
-      { moduleKey: 'ATTENDANCE_HISTORY_MODULE', moduleName: 'Attendance History', sortOrder: 2 },
-      { moduleKey: 'WORKSHIFT_ROSTER_MODULE', moduleName: 'WorkShift & Roster', sortOrder: 3 },
-      { moduleKey: 'GEO_MARKING_MODULE', moduleName: 'Geo Marking', sortOrder: 4 },
-      { moduleKey: 'GEO_FENCING_MODULE', moduleName: 'Geo Fencing', sortOrder: 5 },
-      { moduleKey: 'PAYROLL_MODULE', moduleName: 'Payroll', sortOrder: 6 },
-      { moduleKey: 'OFF_BOARDING_MODULE', moduleName: 'Off Boarding', sortOrder: 7 },
-      { moduleKey: 'REIMBURSEMENT_MODULE', moduleName: 'Reimbursement', sortOrder: 8 },
-      { moduleKey: 'IM_MODULE', moduleName: 'Instant Messaging', sortOrder: 9 },
-      { moduleKey: 'TASK_MODULE', moduleName: 'Task Management', sortOrder: 10 },
-      { moduleKey: 'ONFIELD_TASK_MODULE', moduleName: 'On-Field Task Management', sortOrder: 11 },
-      { moduleKey: 'CONTRACTOR_MODULE', moduleName: 'Contractor Management', sortOrder: 12 },
-      { moduleKey: 'ADVANCE_REPORTING_MODULE', moduleName: 'Advance Reporting', sortOrder: 13 },
-    ];
+    const modules = PRODUCT_MODULE_CATALOG;
 
     for (const item of modules) {
       await this.prisma.module.upsert({

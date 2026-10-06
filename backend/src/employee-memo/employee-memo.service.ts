@@ -422,19 +422,21 @@ export class EmployeeMemoService {
     const notifyEmployeeIds = [...new Set(employeeIDs)];
     await Promise.all(
       notifyEmployeeIds.map(async (empId) => {
-        void this.mailService
-          .sendToEmployeeWithManagerCc({
-            employeeId: empId,
-            companyID: dto.companyID,
-            eventType: isWarning ? 'WARNING' : 'NOTICE_BOARD',
-            vars: {
-              subject: dto.subject ?? '',
-              description: dto.description ?? '',
-            },
-          })
-          .catch((err) => {
-            this.logger.warn(`Memo email skipped for employee ${empId}: ${err?.message || err}`);
-          });
+        if (isWarning) {
+          void this.mailService
+            .sendToEmployeeWithManagerCc({
+              employeeId: empId,
+              companyID: dto.companyID,
+              eventType: 'WARNING',
+              vars: {
+                subject: dto.subject ?? '',
+                description: dto.description ?? '',
+              },
+            })
+            .catch((err) => {
+              this.logger.warn(`Memo email skipped for employee ${empId}: ${err?.message || err}`);
+            });
+        }
 
         try {
           await this.pushService.sendToEmployee(empId, pushTitle, pushBody, {

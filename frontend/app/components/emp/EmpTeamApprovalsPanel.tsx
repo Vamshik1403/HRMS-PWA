@@ -19,6 +19,7 @@ import { totalAmount } from "./EmpReimbursementMobile";
 import { Button } from "../ui/button";
 import { cn } from "@/app/utils/cn";
 import { useRouter } from "next/navigation";
+import { canViewProductModule, useProductAccess } from "@/lib/productAccess";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
@@ -78,6 +79,9 @@ export function EmpTeamApprovalsPanel({
   const [selectedReimbId, setSelectedReimbId] = useState<string | null>(null);
   const [newRequestOpen, setNewRequestOpen] = useState(false);
   const router = useRouter();
+  useProductAccess();
+  const leaveEnabled = canViewProductModule("LEAVE_MODULE");
+  const reimbEnabled = canViewProductModule("REIMBURSEMENT_MODULE");
 
   const loadData = useCallback(async (empId: number) => {
     setLoading(true);
@@ -101,8 +105,12 @@ export function EmpTeamApprovalsPanel({
         dayStatuses: a.dayStatuses,
         createdAt: a.createdAt || new Date().toISOString(),
       }));
-      setPageCache("empLeaveApps", mappedLeave);
-      setLeaveApps(mappedLeave);
+      if (canViewProductModule("LEAVE_MODULE")) {
+        setPageCache("empLeaveApps", mappedLeave);
+        setLeaveApps(mappedLeave);
+      } else {
+        setLeaveApps([]);
+      }
 
       const mappedReimb = (Array.isArray(reimbData) ? reimbData : []).map((r: any) => {
         const items =
@@ -126,8 +134,12 @@ export function EmpTeamApprovalsPanel({
           manageEmployee: r.manageEmployee,
         };
       });
-      setPageCache("empReimbursements", mappedReimb);
-      setReimbRows(mappedReimb);
+      if (canViewProductModule("REIMBURSEMENT_MODULE")) {
+        setPageCache("empReimbursements", mappedReimb);
+        setReimbRows(mappedReimb);
+      } else {
+        setReimbRows([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -272,7 +284,9 @@ export function EmpTeamApprovalsPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
        <div className="flex flex-wrap items-center gap-2">
-  {(["all", "leave", "reimbursement"] as FilterType[]).map((f) => (
+  {(["all", "leave", "reimbursement"] as FilterType[])
+    .filter((f) => f === "all" || (f === "leave" ? leaveEnabled : reimbEnabled))
+    .map((f) => (
     <Button
       key={f}
       type="button"

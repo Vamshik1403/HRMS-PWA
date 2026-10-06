@@ -81,12 +81,14 @@ import { ApprovalWorkflowModule } from './approval-workflow/approval-workflow.mo
 import { ApprovalRequestModule } from './approval-request/approval-request.module';
 import { EmployeePermissionsModule } from './employee-permissions/employee-permissions.module';
 import { CompanyPolicyModule } from './company-policy/company-policy.module';
+import { CompanyModuleAccessModule } from './common/company-module-access.module';
 
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['.env'] }),
     EmpManagerScopeModule,
+    CompanyModuleAccessModule,
     MailModule,
     PrismaModule,
     ServeStaticModule.forRoot({

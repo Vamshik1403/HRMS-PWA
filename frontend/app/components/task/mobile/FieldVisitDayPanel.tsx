@@ -340,29 +340,9 @@ export function FieldVisitDayPanel({ user }: { user: CurrentUserLike | null | un
               );
             })
           : (
-            <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-3 space-y-2">
-              <p className="font-semibold text-gray-900">Attendance Check-in</p>
-              <p className="text-[12px] text-gray-500">No field visit is assigned today. Check in from your current location with a selfie.</p>
-              {fieldStatus ? <p className="text-sm font-semibold text-amber-700">{fieldStatus}</p> : null}
-              <label className="text-[12px] font-semibold text-gray-600 block">Reason</label>
-              <select
-                value={reason}
-                onChange={(e) => setReason(e.target.value as (typeof FIELD_REASONS)[number])}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-[14px]"
-              >
-                <option value="">Select a reason</option>
-                {FIELD_REASONS.map((item) => (
-                  <option key={item} value={item}>{item}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                disabled={sending || !reason}
-                onClick={() => void submitField()}
-                className="w-full rounded-xl bg-[#2563eb] text-white font-semibold text-sm py-2.5 disabled:opacity-60"
-              >
-                Attendance Check-in
-              </button>
+            <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-3">
+              <p className="font-semibold text-gray-900">No site visit today</p>
+              <p className="text-[12px] text-gray-500 mt-1">Use Mark In on Home when you are at the office. Site Check-in appears here only for an assigned visit.</p>
             </div>
           )}
       </div>

@@ -514,7 +514,7 @@ model Devices {
   deviceName         String               @db.VarChar
   deviceMake         String               @db.VarChar
   deviceModel        String               @db.VarChar
-  deviceSN           String
+  deviceSN           String               
   createdAt          DateTime             @default(now())
   updatedAt          DateTime             @updatedAt
   deviceType         String?              @db.VarChar
@@ -1658,7 +1658,7 @@ model User {
   contactNo String?
   email     String?
   requireLoginOtp Boolean @default(false)
-
+  
   serviceProviderID Int?
   companyID         Int?
   branchesID        Int?

@@ -4,6 +4,7 @@ import './globals.css'
 import { Toaster } from 'sonner'
 import ServiceWorkerBootstrap from './components/ServiceWorkerBootstrap'
 import FetchRefreshBootstrap from './components/FetchRefreshBootstrap'
+import ProductAccessBootstrap from './components/ProductAccessBootstrap'
 import { AdminShellProvider } from './components/layout/AdminShellProvider'
 import { Providers } from './providers'
 
@@ -146,6 +147,7 @@ export default function RootLayout({
         <Providers>
           <ServiceWorkerBootstrap />
           <FetchRefreshBootstrap />
+          <ProductAccessBootstrap />
           <AdminShellProvider>{children}</AdminShellProvider>
           <Toaster position="top-right" richColors closeButton />
         </Providers>

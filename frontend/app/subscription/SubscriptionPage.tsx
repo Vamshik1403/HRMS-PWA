@@ -1,7 +1,8 @@
 // app/subscription/page.tsx
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { ADDON_MODULE_KEYS, ATTENDANCE_CORE_MODULE_KEYS } from "@/lib/productModules";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -50,11 +51,130 @@ interface Module {
   moduleKey: string;
 }
 
+function idsForKeys(modules: Module[], keys: readonly string[]) {
+  const wanted = new Set<string>(keys);
+  return modules.filter((module) => wanted.has(module.moduleKey)).map((module) => module.id);
+}
+
+function BundleCheckbox({
+  label,
+  childIds,
+  selected,
+  onChange,
+}: {
+  label: string;
+  childIds: ID[];
+  selected: ID[];
+  onChange: (next: ID[]) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  const selectedCount = childIds.filter((id) => selected.includes(id)).length;
+  const all = childIds.length > 0 && selectedCount === childIds.length;
+  const some = selectedCount > 0 && !all;
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = some;
+  }, [some]);
+  return (
+    <label className="flex items-center gap-2 font-medium">
+      <input
+        ref={ref}
+        type="checkbox"
+        checked={all}
+        onChange={() => {
+          if (all) onChange(selected.filter((id) => !childIds.includes(id)));
+          else onChange([...new Set([...selected, ...childIds])]);
+        }}
+        className="rounded border-gray-300"
+      />
+      <span className="text-sm">{label}</span>
+    </label>
+  );
+}
+
+function ModulePicker({
+  modules,
+  selected,
+  onChange,
+}: {
+  modules: Module[];
+  selected: ID[];
+  onChange: (next: ID[]) => void;
+}) {
+  const groups = [
+    { label: "Attendance Core", keys: ATTENDANCE_CORE_MODULE_KEYS },
+    { label: "Add-ons", keys: ADDON_MODULE_KEYS },
+  ];
+  const groupedKeys = new Set<string>([...ATTENDANCE_CORE_MODULE_KEYS, ...ADDON_MODULE_KEYS]);
+  const other = modules.filter((module) => !groupedKeys.has(module.moduleKey));
+  const toggle = (id: ID, checked: boolean) => {
+    onChange(checked ? [...selected, id] : selected.filter((item) => item !== id));
+  };
+  return (
+    <div className="space-y-4">
+      <Label>Modules Included</Label>
+      {groups.map((group) => {
+        const children = modules.filter((module) => (group.keys as readonly string[]).includes(module.moduleKey));
+        const childIds = children.map((module) => module.id);
+        return (
+          <div key={group.label} className="rounded-xl border border-border p-3 space-y-3">
+            <BundleCheckbox label={group.label} childIds={childIds} selected={selected} onChange={onChange} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-6">
+              {children.map((module) => (
+                <label key={module.id} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(module.id)}
+                    onChange={(e) => toggle(module.id, e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm">{module.moduleName}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      {other.length > 0 ? (
+        <div className="rounded-xl border border-border p-3 space-y-3">
+          <p className="text-sm font-medium">Other modules</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {other.map((module) => (
+              <label key={module.id} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(module.id)}
+                  onChange={(e) => toggle(module.id, e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                <span className="text-sm">{module.moduleName}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 interface AssignedModule {
   id: ID;
   planID: ID;
   moduleID: ID;
   module: Module;
+}
+
+function planAmountDraft(raw: string): string {
+  const cleaned = raw.replace(/[^\d.]/g, "");
+  const dot = cleaned.indexOf(".");
+  const whole = (dot === -1 ? cleaned : cleaned.slice(0, dot)).replace(/^0+(?=\d)/, "");
+  const fraction = dot === -1 ? "" : cleaned.slice(dot + 1).replace(/\./g, "").slice(0, 2);
+  if (dot === -1) return whole;
+  return `${whole || "0"}.${fraction}`;
+}
+
+function planAmountNumber(draft: string): number {
+  const value = Number(draft);
+  return Number.isFinite(value) ? value : 0;
 }
 
 interface Plan {
@@ -135,7 +255,7 @@ export default function SubscriptionPage() {
   const [planForm, setPlanForm] = useState({
     planName: "",
     validityDays: 90,
-    planAmount: 0,
+    planAmount: "",
     moduleIDs: [] as ID[],
     isActive: true,
   });
@@ -252,7 +372,7 @@ export default function SubscriptionPage() {
     setPlanForm({
       planName: "",
       validityDays: 90,
-      planAmount: 0,
+      planAmount: "",
       moduleIDs: [],
       isActive: true,
     });
@@ -266,7 +386,7 @@ export default function SubscriptionPage() {
       await fetchJSONSafe(API.plans, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(planForm),
+        body: JSON.stringify({ ...planForm, planAmount: planAmountNumber(planForm.planAmount) }),
       });
       toast.success("Plan created successfully");
       resetPlanForm();
@@ -286,7 +406,7 @@ export default function SubscriptionPage() {
       await fetchJSONSafe(`${API.plans}/${editingPlan.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(planForm),
+        body: JSON.stringify({ ...planForm, planAmount: planAmountNumber(planForm.planAmount) }),
       });
       toast.success("Plan updated successfully");
       resetPlanForm();
@@ -315,7 +435,7 @@ export default function SubscriptionPage() {
     setPlanForm({
       planName: plan.planName,
       validityDays: plan.validityDays,
-      planAmount: plan.planAmount,
+      planAmount: Number(plan.planAmount) ? planAmountDraft(String(Number(plan.planAmount))) : "",
       moduleIDs: plan.assignedModules?.map((am) => am.moduleID) || [],
       isActive: plan.isActive,
     });
@@ -539,7 +659,17 @@ export default function SubscriptionPage() {
           />
         </div>
         {activeTab === "plans" && !showPlanForm && (
-          <Button onClick={() => { resetPlanForm(); setShowPlanForm(true); }}>
+          <Button onClick={() => {
+            setEditingPlan(null);
+            setPlanForm({
+              planName: "",
+              validityDays: 90,
+              planAmount: "",
+              moduleIDs: idsForKeys(modules, ATTENDANCE_CORE_MODULE_KEYS),
+              isActive: true,
+            });
+            setShowPlanForm(true);
+          }}>
             <Plus className="w-4 h-4 mr-2" />
             Add Plan
           </Button>
@@ -584,9 +714,12 @@ export default function SubscriptionPage() {
                     <div className="space-y-2">
                       <Label>Plan Amount (₹) *</Label>
                       <Input
-                        type="number"
+                        inputMode="decimal"
                         value={planForm.planAmount}
-                        onChange={(e) => setPlanForm({ ...planForm, planAmount: parseFloat(e.target.value) || 0 })}
+                        onChange={(e) =>
+                          setPlanForm({ ...planForm, planAmount: planAmountDraft(e.target.value) })
+                        }
+                        placeholder="0"
                         required
                       />
                     </div>
@@ -607,29 +740,11 @@ export default function SubscriptionPage() {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Modules Included</Label>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      {modules.map((module) => (
-                        <label key={module.id} className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={planForm.moduleIDs.includes(module.id)}
-                            onChange={(e) => {
-                              setPlanForm({
-                                ...planForm,
-                                moduleIDs: e.target.checked
-                                  ? [...planForm.moduleIDs, module.id]
-                                  : planForm.moduleIDs.filter((id) => id !== module.id),
-                              });
-                            }}
-                            className="rounded border-gray-300"
-                          />
-                          <span className="text-sm">{module.moduleName}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                  <ModulePicker
+                    modules={modules}
+                    selected={planForm.moduleIDs}
+                    onChange={(moduleIDs) => setPlanForm({ ...planForm, moduleIDs })}
+                  />
 
                   <div className="flex gap-2 pt-4 border-t">
                     <Button type="submit" disabled={saving}>

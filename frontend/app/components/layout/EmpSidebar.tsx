@@ -7,6 +7,7 @@ import { EmpNavLink } from "./emp-nav-link";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
 import { useEmpSidebarBadges, sidebarBadgeForHref } from "@/app/hooks/useEmpSidebarBadges";
 import { filterEmpSidebarNavigation, type EmpSidebarNavGroup } from "./emp-portal-sidebar-navigation";
+import { useProductAccess } from "@/lib/productAccess";
 
 interface EmpSidebarProps {
   collapsed: boolean;
@@ -51,6 +52,7 @@ export function EmpSidebar({ collapsed, onToggle, onRefresh }: EmpSidebarProps) 
   const pathname = usePathname();
   const { isManagerView } = useEmpManagerScope();
   const badges = useEmpSidebarBadges();
+  useProductAccess();
   const groups = filterEmpSidebarNavigation(isManagerView);
 
   return (

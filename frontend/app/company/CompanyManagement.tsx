@@ -20,6 +20,7 @@ import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordRules"
 import { PasswordRuleHints } from "../components/ui/password-rule-hints"
 import { getSidebarContext, clearSidebarContext, setSidebarContext } from "../utils/sidebarContext"
 import { isDesktopManagerFlagSet } from "@/lib/desktopManager"
+import { authHeaders } from "@/lib/auth"
 import {
   canDesktopManagerManage,
   filterCompaniesForUser,
@@ -634,7 +635,13 @@ let filtered =
 
   const loadOwnerPermissionGrid = async (ownerId?: number) => {
     try {
-      const modRes = await fetch("/backend/employee-permissions/modules")
+      const companyId = selectedCompanyForAdmin?.id
+      const modRes = await fetch(
+        companyId
+          ? `/backend/employee-permissions/modules?companyId=${companyId}`
+          : "/backend/employee-permissions/modules",
+        { headers: authHeaders(), cache: "no-store" },
+      )
       const modules = modRes.ok ? await modRes.json() : []
       const list: ModuleMeta[] = Array.isArray(modules) ? modules : []
       setOwnerModules(list)

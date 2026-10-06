@@ -45,8 +45,8 @@ export function EmpCalendarDayDetailPanel({
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
   const showPunches = section === "punches" || section === "all";
-  const showSites = section === "sites" || section === "all";
-  const showTasks = section === "tasks" || section === "all";
+  const showSites = false;
+  const showTasks = false;
   const showTodo = section === "todo" || section === "all";
 
   const refreshPersonalTodos = () => {

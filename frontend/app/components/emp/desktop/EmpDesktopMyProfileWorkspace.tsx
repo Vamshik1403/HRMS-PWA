@@ -19,12 +19,14 @@ import { EmpProfileSalaryAdvancePanel } from "../EmpProfileSalaryAdvancePanel";
 import { EmpProfileMessagingPanel } from "../EmpProfileMessagingPanel";
 import { EmpHolidayListMobile } from "../EmpHolidayListMobile";
 import { getPageCache, setPageCache } from "../../../utils/pageCache";
+import { canViewProductModule, useProductAccess } from "@/lib/productAccess";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
 function EmpDesktopMyProfileWorkspaceInner() {
   const searchParams = useSearchParams();
   const activeTab = resolveProfileWorkspaceTab(searchParams);
+  useProductAccess();
   const [showLoanAdvances, setShowLoanAdvances] = useState<boolean>(() => {
     const cached = getPageCache<{ pwaShowLoanAdvances?: boolean }>("empProfileData");
     if (cached && typeof cached.pwaShowLoanAdvances === "boolean") {
@@ -83,15 +85,27 @@ function EmpDesktopMyProfileWorkspaceInner() {
     { id: "profile", label: "Profile", href: profileTabHref("profile") },
     { id: "attendance", label: "Attendance", href: profileTabHref("attendance") },
     { id: "work-report", label: "Work Report", href: profileTabHref("work-report") },
-    { id: "leave", label: "Leave", href: profileTabHref("leave") },
-    { id: "reimbursement", label: "Reimbursement", href: profileTabHref("reimbursement") },
-    { id: "regularisation", label: "Regularisation", href: profileTabHref("regularisation") },
-    { id: "payslips", label: "Payslip", href: profileTabHref("payslips") },
-    ...(showLoanAdvances
+    ...(canViewProductModule("LEAVE_MODULE")
+      ? [{ id: "leave", label: "Leave", href: profileTabHref("leave") }]
+      : []),
+    ...(canViewProductModule("REIMBURSEMENT_MODULE")
+      ? [{ id: "reimbursement", label: "Reimbursement", href: profileTabHref("reimbursement") }]
+      : []),
+    ...(canViewProductModule("REGULARISATION_MODULE")
+      ? [{ id: "regularisation", label: "Regularisation", href: profileTabHref("regularisation") }]
+      : []),
+    ...(canViewProductModule("PAYSLIP_MODULE")
+      ? [{ id: "payslips", label: "Payslip", href: profileTabHref("payslips") }]
+      : []),
+    ...(showLoanAdvances && canViewProductModule("LOAN_ADVANCE_MODULE")
       ? [{ id: "salary-advance", label: "Loan & Advances", href: profileTabHref("salary-advance") }]
       : []),
-    { id: "holidays", label: "My Holidays", href: profileTabHref("holidays") },
-    { id: "delegation", label: "My Delegations", href: profileTabHref("delegation") },
+    ...(canViewProductModule("HOLIDAY_MODULE")
+      ? [{ id: "holidays", label: "My Holidays", href: profileTabHref("holidays") }]
+      : []),
+    ...(canViewProductModule("DELEGATION_MODULE")
+      ? [{ id: "delegation", label: "My Delegations", href: profileTabHref("delegation") }]
+      : []),
   ];
 
   const isMessaging = activeTab === "messaging";
@@ -124,17 +138,29 @@ function EmpDesktopMyProfileWorkspaceInner() {
 
         {activeTab === "attendance" && <EmpProfileAttendanceView />}
         {activeTab === "work-report" && <EmpProfileWorkReportView />}
-        {activeTab === "leave" && <EmpLeaveMobile desktopTab="overview" embedded compactBalance />}
-        {activeTab === "reimbursement" && <EmpReimbursementMobile desktopTab="overview" embedded />}
-        {activeTab === "regularisation" && <EmpProfileRegularisationView />}
-        {activeTab === "delegation" && <EmpWorkspaceDelegation embedded />}
-        {activeTab === "payslips" && (
+        {activeTab === "leave" && canViewProductModule("LEAVE_MODULE") && (
+          <EmpLeaveMobile desktopTab="overview" embedded compactBalance />
+        )}
+        {activeTab === "reimbursement" && canViewProductModule("REIMBURSEMENT_MODULE") && (
+          <EmpReimbursementMobile desktopTab="overview" embedded />
+        )}
+        {activeTab === "regularisation" && canViewProductModule("REGULARISATION_MODULE") && (
+          <EmpProfileRegularisationView />
+        )}
+        {activeTab === "delegation" && canViewProductModule("DELEGATION_MODULE") && (
+          <EmpWorkspaceDelegation embedded />
+        )}
+        {activeTab === "payslips" && canViewProductModule("PAYSLIP_MODULE") && (
           <Suspense fallback={<div className="text-sm text-muted-foreground">Loading payslips…</div>}>
             <EmpPayoutContent embedded />
           </Suspense>
         )}
-        {showSalaryAdvanceTab && <EmpProfileSalaryAdvancePanel />}
-        {activeTab === "holidays" && <EmpHolidayListMobile embedded />}
+        {showSalaryAdvanceTab && canViewProductModule("LOAN_ADVANCE_MODULE") && (
+          <EmpProfileSalaryAdvancePanel />
+        )}
+        {activeTab === "holidays" && canViewProductModule("HOLIDAY_MODULE") && (
+          <EmpHolidayListMobile embedded />
+        )}
       </div>
     </EmpDesktopPage>
       ) : null}

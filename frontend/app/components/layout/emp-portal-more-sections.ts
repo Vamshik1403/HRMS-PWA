@@ -1,4 +1,5 @@
 import { canViewModule, hasCompanyAccessFlag, isCompanyOwnerFlag } from "@/lib/companyAccess";
+import { isProductHrefAllowed } from "@/lib/productAccess";
 
 export type EmpMoreGroupKey =
   | "organization"
@@ -370,6 +371,7 @@ export const EMP_MORE_SECTIONS: EmpMoreSection[] = [
 
 export function getVisibleEmpMoreSections(isManager: boolean): EmpMoreSection[] {
   return EMP_MORE_SECTIONS.filter((section) => {
+    if (!isProductHrefAllowed(section.href)) return false;
     if (section.managerOnly && !isManager) return false;
     if (section.ownerOrRightsOnly) {
       return isCompanyOwnerFlag() || canViewModule("RIGHTS");

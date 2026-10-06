@@ -847,9 +847,9 @@ export class TaskProjectsService {
     const andParts: Record<string, unknown>[] = [];
     if (search) {
       andParts.push({
-        OR: [
-          { taskName: { contains: search, mode: 'insensitive' } },
-          { taskCode: { contains: search, mode: 'insensitive' } },
+          OR: [
+            { taskName: { contains: search, mode: 'insensitive' } },
+            { taskCode: { contains: search, mode: 'insensitive' } },
           { customer: { is: { customerName: { contains: search, mode: 'insensitive' } } } },
           { customer: { is: { customerCode: { contains: search, mode: 'insensitive' } } } },
         ],

@@ -5,21 +5,19 @@ import { dispatchAppRefresh } from "./appRefresh";
 let patched = false;
 let redirectingForExpiredSubscription = false;
 
-function handleSubscriptionExpired() {
+function handleSubscriptionBlocked(message: string) {
   if (redirectingForExpiredSubscription || typeof window === "undefined") return;
   redirectingForExpiredSubscription = true;
   try {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("token");
     localStorage.removeItem("user");
+    localStorage.removeItem("openhrmProductAccess");
     document.cookie = "accessToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   } catch {
     /* ignore */
   }
-  const message = encodeURIComponent(
-    "Your company subscription has expired. Please contact your administrator to renew it.",
-  );
-  window.location.href = `/login?subscriptionExpired=1&msg=${message}`;
+  window.location.href = `/login?subscriptionExpired=1&msg=${encodeURIComponent(message)}`;
 }
 
 /** After any successful mutating /backend/* request, refresh open list pages. */
@@ -63,13 +61,25 @@ export function ensureFetchRefreshPatch(): void {
             ? input.href
             : input.url;
 
-      if (res.status === 401 && url.includes("/backend/") && !url.includes("/auth/login")) {
+      if (
+        (res.status === 401 || res.status === 403) &&
+        url.includes("/backend/") &&
+        !url.includes("/auth/login")
+      ) {
         const clone = res.clone();
         clone
           .json()
           .then((body: any) => {
             if (body?.message === "SUBSCRIPTION_EXPIRED") {
-              handleSubscriptionExpired();
+              handleSubscriptionBlocked(
+                "Your subscription has expired. Please contact the application's administrator.",
+              );
+            } else if (body?.message === "NO_ACTIVE_SUBSCRIPTION") {
+              handleSubscriptionBlocked(
+                "No subscription added or assigned. Contact the application's administrator.",
+              );
+            } else if (body?.message === "MODULE_NOT_SUBSCRIBED" || body?.message === "MODULE_ACCESS_DENIED") {
+              window.dispatchEvent(new Event("openhrm-product-access-stale"));
             }
           })
           .catch(() => {});

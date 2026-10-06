@@ -106,6 +106,12 @@ export function EmployeeRightsPanel({ employeeId }: { employeeId: number }) {
     }
   };
 
+  const visiblePermissions = useMemo(() => {
+    if (!modules.length) return permissions;
+    const allowed = new Set(modules.map((m) => m.moduleKey));
+    return permissions.filter((row) => allowed.has(row.moduleKey));
+  }, [modules, permissions]);
+
   const labelFor = useMemo(() => {
     const map = new Map(modules.map((m) => [m.moduleKey, m.label]));
     return (key: string) => map.get(key) || key;
@@ -125,7 +131,7 @@ export function EmployeeRightsPanel({ employeeId }: { employeeId: number }) {
 
   return (
     <div className="space-y-4">
-      {permissions.length > 0 ? (
+      {visiblePermissions.length > 0 ? (
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full min-w-[560px] text-sm">
             <thead>
@@ -140,7 +146,7 @@ export function EmployeeRightsPanel({ employeeId }: { employeeId: number }) {
               </tr>
             </thead>
             <tbody>
-              {permissions.map((row) => {
+              {visiblePermissions.map((row) => {
                 const allChecked = !!(row.canView && row.canCreate && row.canEdit && row.canDelete);
                 return (
                   <tr key={row.moduleKey} className="border-b last:border-0">

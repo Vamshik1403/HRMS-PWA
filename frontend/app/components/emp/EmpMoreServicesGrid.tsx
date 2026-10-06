@@ -13,6 +13,7 @@ import {
   type EmpMoreSection,
 } from "@/app/components/layout/emp-portal-more-sections";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
+import { useProductAccess } from "@/lib/productAccess";
 import {
   moreSectionBadgeCount,
   useEmpSidebarBadges,
@@ -68,12 +69,13 @@ export function EmpMoreServicesGrid() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isManagerView } = useEmpManagerScope();
+  const productAccess = useProductAccess();
   const badges = useEmpSidebarBadges();
   const [mobileGroup, setMobileGroup] = useState<EmpMoreGroupKey | null>(null);
 
   const sections = useMemo(
     () => getVisibleEmpMoreSections(isManagerView),
-    [isManagerView],
+    [isManagerView, productAccess],
   );
 
   const allGroups = useMemo(() => groupEmpMoreSections(sections), [sections]);

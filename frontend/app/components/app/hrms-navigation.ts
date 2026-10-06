@@ -28,6 +28,7 @@ import {
   isCompanyAdminLikeRole,
   moduleKeyForPath,
 } from "@/lib/companyAccess";
+import { isProductHrefAllowed } from "@/lib/productAccess";
 
 export interface NavContext {
   role: string;
@@ -313,6 +314,7 @@ export function filterNavigation(ctx: NavContext): NavGroup[] {
 
     const items = group.items.filter((item) => {
       if (item.show && !item.show(ctx)) return false;
+      if (!isProductHrefAllowed(item.href)) return false;
       if (gateEmployeeModules) {
         const moduleKey = moduleKeyForPath(item.href);
         if (moduleKey && !canViewModule(moduleKey)) return false;

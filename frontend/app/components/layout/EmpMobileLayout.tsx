@@ -21,6 +21,7 @@ import PushNotificationPrompt from "../PushNotificationPrompt";
 import { EmpMarkoutReminderBanner } from "../emp/EmpMarkoutReminderBanner";
 import { toast } from "sonner";
 import { TASK_MANAGEMENT_ENABLED } from "@/app/config/featureFlags";
+import { isProductHrefAllowed, useProductAccess } from "@/lib/productAccess";
 import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
 import { applyEmpTheme, readStoredEmpTheme } from "@/app/utils/empTheme";
 
@@ -83,6 +84,8 @@ export default function EmpMobileLayout({ children, hideBottomNav = false }: Emp
 function EmpMobileLayoutInner({ children, hideBottomNav = false }: EmpMobileLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
+  useProductAccess();
+  const visibleNav = navItems.filter((item) => isProductHrefAllowed(item.href));
   const [showInstallBanner, setShowInstallBanner] = useState(false);
   const [showNotifButton, setShowNotifButton] = useState(false);
   const [pushModalOpen, setPushModalOpen] = useState(false);
@@ -304,7 +307,7 @@ function EmpMobileLayoutInner({ children, hideBottomNav = false }: EmpMobileLayo
       {!hideBottomNav && (
       <nav className="emp-pwa-bottom-nav fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur-md border-t border-gray-100/80 shadow-[0_-2px_16px_rgba(0,0,0,0.06)]" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
         <div className="flex items-center justify-around h-[56px] px-2">
-          {navItems.map((item) => {
+          {visibleNav.map((item) => {
             const active = isActive(item.href);
             return (
               <Link

@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, SubscriptionStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CompanyModuleAccessService } from '../common/company-module-access.service';
+import { endOfIstValidity, startOfIstDay } from '../common/product-modules';
 import { CreateSubscriptionDto } from './dto/create-subscription.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
 import { CreateCompanySubscriptionDto } from './dto/create-company-subscription.dto';
@@ -8,13 +10,13 @@ import { UpdateCompanySubscriptionDto } from './dto/update-company-subscription.
 
 @Injectable()
 export class SubscriptionService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly moduleAccess: CompanyModuleAccessService,
+  ) {}
 
   private calculateEndDate(startDate: Date, validityDays: number) {
-    const end = new Date(startDate);
-    end.setDate(end.getDate() + validityDays - 1);
-    end.setHours(23, 59, 59, 999);
-    return end;
+    return endOfIstValidity(startDate, validityDays);
   }
 
   async createPlan(dto: CreateSubscriptionDto) {
@@ -85,7 +87,7 @@ export class SubscriptionService {
         await tx.subscriptionPlanModule.deleteMany({ where: { planID: id } });
       }
 
-      return tx.subscriptionPlan.update({
+      const updated = await tx.subscriptionPlan.update({
         where: { id },
         data: {
           ...(dto.planName !== undefined && { planName: dto.planName.trim() }),
@@ -102,6 +104,21 @@ export class SubscriptionService {
           assignedModules: { include: { module: true } },
         },
       });
+
+      if (dto.moduleIDs) {
+        const companies = await tx.companySubscription.findMany({
+          where: { planID: id, status: SubscriptionStatus.ACTIVE, isActive: true },
+          select: { companyID: true },
+        });
+        const seen = new Set<number>();
+        for (const row of companies) {
+          if (seen.has(row.companyID)) continue;
+          seen.add(row.companyID);
+          await this.moduleAccess.syncCompanyModules(row.companyID, dto.moduleIDs, tx);
+        }
+      }
+
+      return updated;
     });
   }
 
@@ -132,34 +149,51 @@ export class SubscriptionService {
       throw new BadRequestException('Invalid or inactive plan');
     }
 
-    const startDate = new Date(dto.startDate);
+    const startDate = startOfIstDay(new Date(dto.startDate));
     const endDate = this.calculateEndDate(startDate, plan.validityDays);
 
-    await this.prisma.companySubscription.updateMany({
-      where: {
-        companyID: dto.companyID,
-        status: SubscriptionStatus.ACTIVE,
-      },
-      data: {
-        status: SubscriptionStatus.RENEWED,
-        isActive: false,
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      const fullPlan = await tx.subscriptionPlan.findUnique({
+        where: { id: dto.planID },
+        include: { assignedModules: true },
+      });
+      if (!fullPlan || !fullPlan.isActive) {
+        throw new BadRequestException('Invalid or inactive plan');
+      }
 
-    return this.prisma.companySubscription.create({
-      data: {
-        companyID: dto.companyID,
-        planID: dto.planID,
-        startDate,
-        endDate,
-        status: SubscriptionStatus.ACTIVE,
-        isActive: true,
-        renewedFromID: dto.renewedFromID,
-      },
-      include: {
-        company: true,
-        plan: { include: { assignedModules: { include: { module: true } } } },
-      },
+      await tx.companySubscription.updateMany({
+        where: {
+          companyID: dto.companyID,
+          status: SubscriptionStatus.ACTIVE,
+        },
+        data: {
+          status: SubscriptionStatus.RENEWED,
+          isActive: false,
+        },
+      });
+
+      const created = await tx.companySubscription.create({
+        data: {
+          companyID: dto.companyID,
+          planID: dto.planID,
+          startDate,
+          endDate,
+          status: SubscriptionStatus.ACTIVE,
+          isActive: true,
+          renewedFromID: dto.renewedFromID,
+        },
+        include: {
+          company: true,
+          plan: { include: { assignedModules: { include: { module: true } } } },
+        },
+      });
+
+      await this.moduleAccess.syncCompanyModules(
+        dto.companyID,
+        fullPlan.assignedModules.map((row) => row.moduleID),
+        tx,
+      );
+      return created;
     });
   }
 
@@ -203,15 +237,15 @@ export class SubscriptionService {
 
       if (!plan) throw new NotFoundException('Plan not found');
 
-      const startDate = dto.startDate ? new Date(dto.startDate) : existing.startDate;
+      const startDate = dto.startDate ? startOfIstDay(new Date(dto.startDate)) : existing.startDate;
       endDate = this.calculateEndDate(startDate, plan.validityDays);
     }
 
-    return this.prisma.companySubscription.update({
+    const updated = await this.prisma.companySubscription.update({
       where: { id },
       data: {
         ...(dto.planID !== undefined && { planID: dto.planID }),
-        ...(dto.startDate !== undefined && { startDate: new Date(dto.startDate) }),
+        ...(dto.startDate !== undefined && { startDate: startOfIstDay(new Date(dto.startDate)) }),
         endDate,
         ...(dto.status !== undefined && {
           status: dto.status,
@@ -229,15 +263,23 @@ export class SubscriptionService {
       },
       include: {
         company: true,
-        plan: true,
+        plan: { include: { assignedModules: true } },
       },
     });
+
+    if (dto.planID) {
+      const moduleIds = (updated.plan?.assignedModules || []).map((row) => row.moduleID);
+      await this.moduleAccess.syncCompanyModules(updated.companyID, moduleIds);
+    } else {
+      this.moduleAccess.invalidate(updated.companyID);
+    }
+    return updated;
   }
 
   async deactivateSubscription(id: number, body: { deactivationWef: string; reason?: string }) {
     await this.findOneSubscription(id);
 
-    return this.prisma.companySubscription.update({
+    const updated = await this.prisma.companySubscription.update({
       where: { id },
       data: {
         status: SubscriptionStatus.INACTIVE,
@@ -247,6 +289,8 @@ export class SubscriptionService {
         deactivationReason: body.reason,
       },
     });
+    this.moduleAccess.invalidate(updated.companyID);
+    return updated;
   }
 
   async renewSubscription(id: number, dto: CreateCompanySubscriptionDto) {

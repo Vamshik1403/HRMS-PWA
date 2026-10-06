@@ -2062,8 +2062,8 @@ async findOne(id: number) {
                 createdAt: 'desc',
               },
             },
-          },
         },
+      },
     },
   });
 }
@@ -2642,7 +2642,7 @@ async findOne(id: number) {
               data: docsToCreate as any[],
             });
           }
-        }
+      }
 
       // Delete removed emp designations
       if (empDesignationIdsToDelete.length) {
@@ -2724,7 +2724,7 @@ async findOne(id: number) {
               where: { id },
               data: { departmentNameID: latestDept },
             });
-          }
+        }
       }
 
       // Delete and upsert empEmploymentType
@@ -3201,8 +3201,8 @@ async remove(id: number, req?: Request) {
         where: { employeeID: id },
       }),
         this.prisma.employeeDocument.deleteMany({
-          where: { employeeID: id },
-        }),
+        where: { employeeID: id },
+      }),
       this.prisma.empAttendanceRegularise.deleteMany({
         where: { manageEmployeeID: id },
       }),

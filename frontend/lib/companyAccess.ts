@@ -44,6 +44,27 @@ export function clearCompanyAccess() {
   localStorage.removeItem(COMPANY_ACCESS_KEY);
 }
 
+export async function refreshCompanyAccess(token?: string | null) {
+  if (typeof window === "undefined") return null;
+  const accessToken =
+    token || localStorage.getItem("accessToken") || localStorage.getItem("token") || "";
+  if (!accessToken) return null;
+  const res = await fetch("/backend/employee-permissions/me", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  if (!res.ok) return readCompanyAccess();
+  const access = await res.json();
+  return persistCompanyAccessFromUser({
+    role: "EMPLOYEE",
+    type: "employee",
+    isCompanyOwner: !!access?.isCompanyOwner,
+    ownerTitle: access?.ownerTitle,
+    hasAnyCompanyAccess: access?.hasAnyCompanyAccess,
+    permissions: access?.permissions ?? [],
+  });
+}
+
 export function persistCompanyAccessFromUser(user: any): CompanyAccessSnapshot | null {
   if (!user || (user.role !== "EMPLOYEE" && user.type !== "employee")) {
     clearCompanyAccess();
@@ -93,7 +114,7 @@ export function canModuleAction(moduleKey: string, action: ModuleAction): boolea
     if (action === "delete") return !!row.canDelete;
     return false;
   }
-  return !!snap.isCompanyOwner;
+  return false;
 }
 
 export function canViewModule(moduleKey: string): boolean {

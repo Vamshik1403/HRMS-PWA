@@ -11,7 +11,6 @@ export type CompanyHubId =
   | "payroll"
   | "reports"
   | "tax"
-  | "policy"
   | "documents"
   | "contract"
   | "tasks"
@@ -21,6 +20,8 @@ export type CompanyHubId =
 export type CompanyHubTab = {
   id: string;
   label: string;
+  /** Product modules that unlock this tab. Empty means the tab is not part of any plan. */
+  productModules?: string[];
   embed?:
     | "dashboard"
     | "hierarchy"
@@ -85,13 +86,13 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     icon: "solar:buildings-2-bold-duotone",
     iconClassName: "text-sky-700",
     tabs: [
-      { id: "dashboard", label: "Dashboard", embed: "dashboard" },
-      { id: "hierarchy", label: "Company Hierarchy", embed: "hierarchy" },
-      { id: "branches", label: "Branches", embed: "branches" },
-      { id: "devices", label: "Attendance Devices", embed: "devices" },
-      { id: "federal-domain", label: "Federal Domain", embed: "federal-domain" },
-      { id: "directory", label: "Employee Directory", embed: "employees" },
-      { id: "holidays", label: "Holiday Calendar", embed: "public-holiday" },
+      { id: "dashboard", label: "Dashboard", embed: "dashboard", productModules: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+      { id: "hierarchy", label: "Company Hierarchy", embed: "hierarchy", productModules: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+      { id: "branches", label: "Branches", embed: "branches", productModules: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+      { id: "devices", label: "Attendance Devices", embed: "devices", productModules: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+      { id: "federal-domain", label: "Federal Domain", embed: "federal-domain", productModules: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+      { id: "directory", label: "Employee Directory", embed: "employees", productModules: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+      { id: "holidays", label: "Holiday Calendar", embed: "public-holiday", productModules: ["HOLIDAY_MODULE"] },
     ],
   },
   {
@@ -114,11 +115,11 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     icon: "solar:users-group-rounded-bold-duotone",
     iconClassName: "text-indigo-700",
     tabs: [
-      { id: "employees", label: "Employees", embed: "employees" },
-      { id: "departments", label: "Departments", embed: "departments" },
-      { id: "designations", label: "Designations", embed: "designations" },
-      { id: "transitions", label: "Transitions", embed: "promotions" },
-      { id: "reports", label: "Reports", embed: "reports" },
+      { id: "employees", label: "Employees", embed: "employees", productModules: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+      { id: "departments", label: "Departments", embed: "departments", productModules: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+      { id: "designations", label: "Designations", embed: "designations", productModules: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+      { id: "transitions", label: "Transitions", embed: "promotions", productModules: ["PROMOTIONS_MODULE", "TRANSFERS_MODULE"] },
+      { id: "reports", label: "Reports", embed: "reports", productModules: ["ADVANCE_REPORTING_MODULE"] },
     ],
   },
   {
@@ -126,7 +127,7 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     label: "Offboarding",
     icon: "solar:user-minus-bold-duotone",
     iconClassName: "text-rose-700",
-    tabs: [{ id: "records", label: "Offboarding", embed: "termination" }],
+    tabs: [{ id: "records", label: "Offboarding", embed: "termination", productModules: ["OFF_BOARDING_MODULE"] }],
   },
   {
     id: "attendance",
@@ -134,10 +135,10 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     icon: "solar:calendar-bold-duotone",
     iconClassName: "text-cyan-700",
     tabs: [
-      { id: "shifts", label: "Work Shifts", embed: "work-shifts" },
-      { id: "policy", label: "Attendance Policy", embed: "attendance-policy" },
-      { id: "roster", label: "Roster", embed: "roster" },
-      { id: "regularisation", label: "Regularisation", embed: "regularisation" },
+      { id: "shifts", label: "Work Shifts", embed: "work-shifts", productModules: ["WORKSHIFT_ROSTER_MODULE"] },
+      { id: "policy", label: "Attendance Policy", embed: "attendance-policy", productModules: ["ATTENDANCE_POLICY_MODULE"] },
+      { id: "roster", label: "Roster", embed: "roster", productModules: ["WORKSHIFT_ROSTER_MODULE"] },
+      { id: "regularisation", label: "Regularisation", embed: "regularisation", productModules: ["REGULARISATION_MODULE"] },
       { id: "import", label: "Import Attendance", embed: "import-attendance" },
     ],
   },
@@ -147,9 +148,9 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     icon: "solar:calendar-date-bold-duotone",
     iconClassName: "text-teal-700",
     tabs: [
-      { id: "applications", label: "Leave Applications", embed: "leave-applications" },
-      { id: "policy", label: "Leave Policy", embed: "leave-policy" },
-      { id: "public-holiday", label: "Public Holiday", embed: "public-holiday" },
+      { id: "applications", label: "Leave Applications", embed: "leave-applications", productModules: ["LEAVE_MODULE"] },
+      { id: "policy", label: "Leave Policy", embed: "leave-policy", productModules: ["LEAVE_MODULE"] },
+      { id: "public-holiday", label: "Public Holiday", embed: "public-holiday", productModules: ["HOLIDAY_MODULE"] },
     ],
   },
   {
@@ -164,14 +165,14 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     label: "Claim & Reimbursement",
     icon: "solar:wallet-bold-duotone",
     iconClassName: "text-amber-700",
-    tabs: [{ id: "claims", label: "Reimbursements", embed: "reimbursement" }],
+    tabs: [{ id: "claims", label: "Reimbursements", embed: "reimbursement", productModules: ["REIMBURSEMENT_MODULE"] }],
   },
   {
     id: "advances",
     label: "Advances & Loan",
     icon: "solar:hand-money-bold-duotone",
     iconClassName: "text-orange-700",
-    tabs: [{ id: "advances", label: "Salary Advances", embed: "salary-advance" }],
+    tabs: [{ id: "advances", label: "Salary Advances", embed: "salary-advance", productModules: ["LOAN_ADVANCE_MODULE"] }],
   },
   {
     id: "payroll",
@@ -179,12 +180,12 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     icon: "solar:bill-bold-duotone",
     iconClassName: "text-lime-700",
     tabs: [
-      { id: "run", label: "Run Payroll", embed: "generate-salary" },
-      { id: "cycle", label: "Salary Cycle", embed: "salary-cycle" },
-      { id: "allowances", label: "Allowances", embed: "salary-allowances" },
-      { id: "deductions", label: "Deductions", embed: "salary-deductions" },
-      { id: "paygrade", label: "Paygrade", embed: "paygrade" },
-      { id: "setup", label: "Payroll Setup", embed: "payroll-setup" },
+      { id: "run", label: "Run Payroll", embed: "generate-salary", productModules: ["PAYROLL_MODULE"] },
+      { id: "cycle", label: "Salary Cycle", embed: "salary-cycle", productModules: ["PAYROLL_MODULE"] },
+      { id: "allowances", label: "Allowances", embed: "salary-allowances", productModules: ["PAYROLL_MODULE"] },
+      { id: "deductions", label: "Deductions", embed: "salary-deductions", productModules: ["PAYROLL_MODULE"] },
+      { id: "paygrade", label: "Paygrade", embed: "paygrade", productModules: ["PAYROLL_MODULE"] },
+      { id: "setup", label: "Payroll Setup", embed: "payroll-setup", productModules: ["PAYROLL_MODULE"] },
     ],
   },
   {
@@ -193,11 +194,11 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     icon: "solar:chart-bold-duotone",
     iconClassName: "text-blue-700",
     tabs: [
-      { id: "attendance", label: "Attendance Reports", embed: "reports" },
-      { id: "leave", label: "Leave Reports", embed: "leave-reports" },
-      { id: "payroll", label: "Payroll Reports", embed: "payroll-reports" },
-      { id: "statutory", label: "Statutory Reports", embed: "statutory-reports" },
-      { id: "contractor", label: "Contractor Reports", embed: "contractor-reports" },
+      { id: "attendance", label: "Attendance Reports", embed: "reports", productModules: ["ADVANCE_REPORTING_MODULE"] },
+      { id: "leave", label: "Leave Reports", embed: "leave-reports", productModules: ["ADVANCE_REPORTING_MODULE"] },
+      { id: "payroll", label: "Payroll Reports", embed: "payroll-reports", productModules: ["ADVANCE_REPORTING_MODULE"] },
+      { id: "statutory", label: "Statutory Reports", embed: "statutory-reports", productModules: ["ADVANCE_REPORTING_MODULE"] },
+      { id: "contractor", label: "Contractor Reports", embed: "contractor-reports", productModules: ["ADVANCE_REPORTING_MODULE"] },
     ],
   },
   {
@@ -208,19 +209,6 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     tabs: [
       { id: "company-info", label: "Company Information", embed: "company-info" },
       { id: "compliance", label: "Registrations & Certificates", embed: "compliance" },
-    ],
-  },
-  {
-    id: "policy",
-    label: "Policy Manager",
-    icon: "solar:document-text-bold-duotone",
-    iconClassName: "text-fuchsia-700",
-    tabs: [
-      { id: "shifts", label: "Workshift", embed: "work-shifts" },
-      { id: "attendance-policy", label: "Attendance Policy", embed: "attendance-policy" },
-      { id: "holidays", label: "Manage Holidays", embed: "holidays" },
-      { id: "leave-policy", label: "Leave Policy", embed: "leave-policy" },
-      { id: "setup", label: "Other Policy", embed: "policy-setup" },
     ],
   },
   {
@@ -239,7 +227,7 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     label: "Contract Management",
     icon: "solar:case-bold-duotone",
     iconClassName: "text-stone-700",
-    tabs: [{ id: "contractors", label: "Contractors", embed: "contractors" }],
+    tabs: [{ id: "contractors", label: "Contractors", embed: "contractors", productModules: ["CONTRACTOR_MODULE"] }],
   },
   {
     id: "tasks",
@@ -247,9 +235,9 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     icon: "solar:checklist-bold-duotone",
     iconClassName: "text-fuchsia-700",
     tabs: [
-      { id: "tasks", label: "Tasks", embed: "tasks" },
-      { id: "customers", label: "Customers", embed: "customers" },
-      { id: "sites", label: "Sites", embed: "sites" },
+      { id: "tasks", label: "Tasks", embed: "tasks", productModules: ["TASK_MODULE"] },
+      { id: "customers", label: "Customers", embed: "customers", productModules: ["TASK_MODULE"] },
+      { id: "sites", label: "Sites", embed: "sites", productModules: ["ONFIELD_TASK_MODULE", "TASK_MODULE"] },
     ],
   },
   {
@@ -270,4 +258,16 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
 
 export function getCompanyHub(id: string | undefined) {
   return COMPANY_HUB_TILES.find((hub) => hub.id === id) ?? null;
+}
+
+export function filterCompanyHubTiles(
+  tiles: CompanyHubTile[],
+  tabAllowed: (productModules?: string[]) => boolean,
+): CompanyHubTile[] {
+  return tiles
+    .map((tile) => ({
+      ...tile,
+      tabs: tile.tabs.filter((tab) => tabAllowed(tab.productModules)),
+    }))
+    .filter((tile) => tile.tabs.length > 0);
 }
