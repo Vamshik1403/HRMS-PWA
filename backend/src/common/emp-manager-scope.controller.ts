@@ -28,10 +28,10 @@ export class EmpManagerScopeController {
     const directReporteeIds = await this.scope.getDirectReporteeIds(employeeId);
     const descendantIds = await this.scope.getDescendantReporteeIds(employeeId);
     const reporteeIds = [employeeId, ...descendantIds];
-    const hasReportees = directReporteeIds.length > 0;
-    const reportees = directReporteeIds.length
+    const hasReportees = descendantIds.length > 0;
+    const reportees = descendantIds.length
       ? await this.prisma.manageEmployee.findMany({
-          where: { id: { in: directReporteeIds } },
+          where: { id: { in: descendantIds } },
           select: {
             id: true,
             employeeID: true,

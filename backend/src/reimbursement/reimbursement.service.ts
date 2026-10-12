@@ -5,6 +5,7 @@ import { UpdateReimbursementDto } from './dto/update-reimbursement.dto';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
 import { MailService } from '../mail/mail.service';
 import { EmpManagerScopeService } from '../common/emp-manager-scope.service';
+import { EmployeeMemoService } from '../employee-memo/employee-memo.service';
 import {
   reimbursementPushTitle,
   senderLabelFromRole,
@@ -17,7 +18,42 @@ export class ReimbursementService {
     private readonly pushService: PushNotificationsService,
     private readonly mailService: MailService,
     private readonly managerScope: EmpManagerScopeService,
+    private readonly employeeMemoService: EmployeeMemoService,
   ) {}
+
+  private employeeDisplayName(emp?: {
+    employeeFirstName?: string | null;
+    employeeLastName?: string | null;
+    employeeID?: string | null;
+  } | null): string {
+    if (!emp) return 'An employee';
+    const name = `${emp.employeeFirstName ?? ''} ${emp.employeeLastName ?? ''}`.trim();
+    return name || emp.employeeID || 'An employee';
+  }
+
+  private postReimbursementBroadcast(rec: {
+    companyID?: number | null;
+    branchesID?: number | null;
+    serviceProviderID?: number | null;
+    manageEmployeeID?: number | null;
+    status?: string | null;
+    manageEmployee?: {
+      employeeFirstName?: string | null;
+      employeeLastName?: string | null;
+      employeeID?: string | null;
+    } | null;
+  }): void {
+    if (!rec.companyID || !rec.manageEmployeeID) return;
+    void this.employeeMemoService
+      .createSystemStaffBroadcast({
+        companyID: rec.companyID,
+        branchesID: rec.branchesID,
+        serviceProviderID: rec.serviceProviderID,
+        subjectEmployeeIDs: [rec.manageEmployeeID],
+        description: `Reimbursement ${rec.status || 'Pending'}: ${this.employeeDisplayName(rec.manageEmployee)}`,
+      })
+      .catch(() => null);
+  }
 
   /** Calendar date in Asia/Kolkata (YYYY-MM-DD). Avoids UTC off-by-one vs IST. */
   private kolkataDateISO(d = new Date()): string {
@@ -116,6 +152,7 @@ export class ReimbursementService {
         },
       });
     }
+    this.postReimbursementBroadcast(full);
     return full;
   }
 
@@ -251,6 +288,9 @@ export class ReimbursementService {
         )
         .catch(() => null);
     }
+    if (parent.status && before?.status !== updated.status) {
+      this.postReimbursementBroadcast(updated);
+    }
     return updated;
   }
 
@@ -302,6 +342,7 @@ export class ReimbursementService {
         { url: '/empReimbursement', kind: 'reimbursement' },
       ).catch(() => null);
     }
+    this.postReimbursementBroadcast(updated);
 
     return updated;
   }
@@ -350,6 +391,7 @@ export class ReimbursementService {
         )
         .catch(() => null);
     }
+    this.postReimbursementBroadcast(rec);
     return rec;
   }
 
@@ -378,6 +420,7 @@ export class ReimbursementService {
         )
         .catch(() => null);
     }
+    this.postReimbursementBroadcast(rec);
     return rec;
   }
 

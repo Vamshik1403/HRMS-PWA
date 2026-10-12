@@ -17,6 +17,11 @@ export class SalaryAdvanceController {
     return this.service.findAll();
   }
 
+  @Get('employee/:empId')
+  findByEmployee(@Param('empId', ParseIntPipe) empId: number) {
+    return this.service.findByEmployee(empId);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.service.findOne(id);

@@ -74,6 +74,33 @@ export class EmpManagerScopeService {
     return links.map((l) => l.linkedEmployeeId);
   }
 
+  /**
+   * Every manager above this employee, including skip-level and the top owner
+   * in the same chain. Cycle-safe and does not include the employee.
+   */
+  async getAncestorManagerIds(employeeId: number): Promise<number[]> {
+    const ancestors: number[] = [];
+    const visited = new Set<number>([employeeId]);
+    let frontier = [employeeId];
+
+    while (frontier.length > 0) {
+      const links = await this.prisma.employeeLink.findMany({
+        where: { employeeId: { in: frontier } },
+        select: { linkedEmployeeId: true },
+      });
+      frontier = [];
+      for (const link of links) {
+        const id = Number(link.linkedEmployeeId);
+        if (!Number.isFinite(id) || visited.has(id)) continue;
+        visited.add(id);
+        ancestors.push(id);
+        frontier.push(id);
+      }
+    }
+
+    return ancestors;
+  }
+
   async getEmployeeDisplayName(employeeId: number): Promise<string> {
     const e = await this.prisma.manageEmployee.findUnique({
       where: { id: employeeId },

@@ -23,7 +23,16 @@ import { canViewProductModule, useProductAccess } from "@/lib/productAccess";
 
 const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || "/backend";
 
-type FilterType = "all" | "leave" | "reimbursement";
+type FilterType = "all" | "leave" | "reimbursement" | "advance";
+
+type AdvanceRow = {
+  id: string;
+  manageEmployeeID?: number;
+  manageEmployee?: LeaveAppRow["manageEmployee"];
+  advanceAmount?: string;
+  reason?: string;
+  status?: string;
+};
 
 type UnifiedRow =
   | { kind: "leave"; id: string; employeeName: string; subtitle: string; leave: LeaveAppRow; isOwn?: boolean }
@@ -33,6 +42,14 @@ type UnifiedRow =
       employeeName: string;
       subtitle: string;
       reimb: ReimbursementRow;
+      isOwn?: boolean;
+    }
+  | {
+      kind: "advance";
+      id: string;
+      employeeName: string;
+      subtitle: string;
+      advance: AdvanceRow;
       isOwn?: boolean;
     };
 
@@ -71,6 +88,7 @@ export function EmpTeamApprovalsPanel({
   const [filter, setFilter] = useState<FilterType>("all");
   const [leaveApps, setLeaveApps] = useState<LeaveAppRow[]>([]);
   const [reimbRows, setReimbRows] = useState<ReimbursementRow[]>([]);
+  const [advanceRows, setAdvanceRows] = useState<AdvanceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -82,16 +100,19 @@ export function EmpTeamApprovalsPanel({
   useProductAccess();
   const leaveEnabled = canViewProductModule("LEAVE_MODULE");
   const reimbEnabled = canViewProductModule("REIMBURSEMENT_MODULE");
+  const advanceEnabled = canViewProductModule("LOAN_ADVANCE_MODULE");
 
   const loadData = useCallback(async (empId: number) => {
     setLoading(true);
     try {
-      const [leaveRes, reimbRes] = await Promise.all([
+      const [leaveRes, reimbRes, advanceRes] = await Promise.all([
         fetch(`${BACKEND}/leave-application/employee/${empId}`, { headers: authHeaders(), cache: "no-store" }),
         fetch(`${BACKEND}/reimbursement/employee/${empId}`, { headers: authHeaders(), cache: "no-store" }),
+        fetch(`${BACKEND}/salary-advance/employee/${empId}`, { headers: authHeaders(), cache: "no-store" }),
       ]);
       const leaveData = leaveRes.ok ? await leaveRes.json() : [];
       const reimbData = reimbRes.ok ? await reimbRes.json() : [];
+      const advanceData = advanceRes.ok ? await advanceRes.json() : [];
 
       const mappedLeave = (Array.isArray(leaveData) ? leaveData : []).map((a: any) => ({
         id: String(a.id),
@@ -139,6 +160,20 @@ export function EmpTeamApprovalsPanel({
         setReimbRows(mappedReimb);
       } else {
         setReimbRows([]);
+      }
+
+      const mappedAdvance = (Array.isArray(advanceData) ? advanceData : []).map((row: any) => ({
+        id: String(row.id),
+        manageEmployeeID: row.manageEmployeeID,
+        manageEmployee: row.manageEmployee,
+        advanceAmount: row.advanceAmount,
+        reason: row.reason,
+        status: row.status || "Pending",
+      }));
+      if (canViewProductModule("LOAN_ADVANCE_MODULE")) {
+        setAdvanceRows(mappedAdvance);
+      } else {
+        setAdvanceRows([]);
       }
     } finally {
       setLoading(false);
@@ -197,6 +232,26 @@ export function EmpTeamApprovalsPanel({
     [reimbRows, scope],
   );
 
+  const pendingAdvance = useMemo(
+    () =>
+      advanceRows.filter(
+        (row) =>
+          isTeamMemberId(scope, row.manageEmployeeID) && (row.status || "Pending") === "Pending",
+      ),
+    [advanceRows, scope],
+  );
+
+  const pendingOwnAdvance = useMemo(
+    () =>
+      advanceRows.filter(
+        (row) =>
+          employeeId != null &&
+          row.manageEmployeeID === employeeId &&
+          (row.status || "Pending") === "Pending",
+      ),
+    [advanceRows, employeeId],
+  );
+
   const pendingOwnReimb = useMemo(
     () =>
       reimbRows.filter((r) => {
@@ -227,6 +282,14 @@ export function EmpTeamApprovalsPanel({
       reimb: r,
       isOwn: false,
     }));
+    const advanceUnified: UnifiedRow[] = (canReviewTeam ? pendingAdvance : []).map((row) => ({
+      kind: "advance",
+      id: `advance-${row.id}`,
+      employeeName: employeeName(row.manageEmployeeID, row.manageEmployee),
+      subtitle: `₹${row.advanceAmount || "0"}${row.reason ? ` · ${row.reason}` : ""}`,
+      advance: row,
+      isOwn: false,
+    }));
     const ownLeaveRows: UnifiedRow[] = (showOwnSubmissions ? pendingOwnLeave : []).map((l) => ({
       kind: "leave",
       id: `own-leave-${l.id}`,
@@ -243,23 +306,38 @@ export function EmpTeamApprovalsPanel({
       reimb: r,
       isOwn: true,
     }));
-    return [...leaveRows, ...reimbUnified, ...ownLeaveRows, ...ownReimbRows].sort((a, b) =>
-      a.employeeName.localeCompare(b.employeeName),
+    const ownAdvanceRows: UnifiedRow[] = (showOwnSubmissions ? pendingOwnAdvance : []).map((row) => ({
+      kind: "advance",
+      id: `own-advance-${row.id}`,
+      employeeName: "You",
+      subtitle: `₹${row.advanceAmount || "0"}${row.reason ? ` · ${row.reason}` : ""}`,
+      advance: row,
+      isOwn: true,
+    }));
+    return [...leaveRows, ...reimbUnified, ...advanceUnified, ...ownLeaveRows, ...ownReimbRows, ...ownAdvanceRows].sort(
+      (a, b) => a.employeeName.localeCompare(b.employeeName),
     );
   }, [
     canReviewTeam,
     pendingLeave,
     pendingReimb,
+    pendingAdvance,
     showOwnSubmissions,
     pendingOwnLeave,
     pendingOwnReimb,
+    pendingOwnAdvance,
     scope,
   ]);
 
-  const filtered = unified.filter((row) => filter === "all" || row.kind === filter);
+  const filtered = unified.filter((row) => {
+    if (row.kind === "leave" && !leaveEnabled) return false;
+    if (row.kind === "reimbursement" && !reimbEnabled) return false;
+    if (row.kind === "advance" && !advanceEnabled) return false;
+    return filter === "all" || row.kind === filter;
+  });
 
   const openReview = (row: UnifiedRow) => {
-    if (row.isOwn) return;
+    if (row.isOwn || row.kind === "advance") return;
     if (row.kind === "leave") {
       setDialogType("leave");
       setSelectedLeave(row.leave);
@@ -270,6 +348,19 @@ export function EmpTeamApprovalsPanel({
       setSelectedLeave(null);
     }
     setDialogOpen(true);
+  };
+
+  const decideAdvance = async (id: string, status: "Approved" | "Rejected") => {
+    const res = await fetch(`${BACKEND}/salary-advance/${id}`, {
+      method: "PATCH",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) return;
+    if (employeeId) void loadData(employeeId);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("emp-sidebar-badges-changed"));
+    }
   };
 
   const content = newRequestOpen ? (
@@ -284,8 +375,14 @@ export function EmpTeamApprovalsPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
        <div className="flex flex-wrap items-center gap-2">
-  {(["all", "leave", "reimbursement"] as FilterType[])
-    .filter((f) => f === "all" || (f === "leave" ? leaveEnabled : reimbEnabled))
+  {(["all", "leave", "reimbursement", "advance"] as FilterType[])
+    .filter(
+      (f) =>
+        f === "all" ||
+        (f === "leave" && leaveEnabled) ||
+        (f === "reimbursement" && reimbEnabled) ||
+        (f === "advance" && advanceEnabled),
+    )
     .map((f) => (
     <Button
       key={f}
@@ -294,7 +391,7 @@ export function EmpTeamApprovalsPanel({
       variant={filter === f ? "default" : "outline"}
       onClick={() => setFilter(f)}
     >
-      {f === "all" ? "All" : f === "leave" ? "Leave" : "Reimbursement"}
+      {f === "all" ? "All" : f === "leave" ? "Leave" : f === "reimbursement" ? "Reimbursement" : "Loan advance"}
     </Button>
   ))}
 
@@ -336,17 +433,27 @@ export function EmpTeamApprovalsPanel({
                 <span
                   className={cn(
                     "shrink-0 size-9 rounded-md flex items-center justify-center",
-                    row.kind === "leave" ? "bg-blue-500/10 text-blue-600" : "bg-emerald-500/10 text-emerald-600",
+                    row.kind === "leave"
+                      ? "bg-blue-500/10 text-blue-600"
+                      : row.kind === "advance"
+                        ? "bg-orange-500/10 text-orange-600"
+                        : "bg-emerald-500/10 text-emerald-600",
                   )}
                 >
                   <Icon
-                    icon={row.kind === "leave" ? "solar:calendar-bold-duotone" : "solar:wallet-bold-duotone"}
+                    icon={
+                      row.kind === "leave"
+                        ? "solar:calendar-bold-duotone"
+                        : row.kind === "advance"
+                          ? "solar:hand-money-bold-duotone"
+                          : "solar:wallet-bold-duotone"
+                    }
                     className="size-5"
                   />
                 </span>
                 <div className="min-w-0">
                   <p className="text-[10px] font-bold uppercase tracking-wide text-primary">
-                    {row.kind === "leave" ? "Leave" : "Reimbursement"}
+                    {row.kind === "leave" ? "Leave" : row.kind === "advance" ? "Loan advance" : "Reimbursement"}
                     {row.isOwn ? " · Your request" : ""}
                   </p>
                   <p className="font-semibold text-foreground truncate">{row.employeeName}</p>
@@ -355,6 +462,15 @@ export function EmpTeamApprovalsPanel({
               </div>
               {row.isOwn ? (
                 <span className="text-xs font-medium text-amber-600 shrink-0">Awaiting approval</span>
+              ) : row.kind === "advance" ? (
+                <div className="flex gap-2 shrink-0">
+                  <Button type="button" size="sm" variant="outline" onClick={() => void decideAdvance(row.advance.id, "Rejected")}>
+                    Reject
+                  </Button>
+                  <Button type="button" size="sm" onClick={() => void decideAdvance(row.advance.id, "Approved")}>
+                    Approve
+                  </Button>
+                </div>
               ) : (
                 <Button type="button" size="sm" className="shrink-0" onClick={() => openReview(row)}>
                   Review

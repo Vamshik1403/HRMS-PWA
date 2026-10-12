@@ -6,56 +6,13 @@ import { UpdateGenerateSalaryDto } from './dto/update-generate-salary.dto';
 import { empPayoutHrefForPeriod } from '../common/payslip-period.util';
 import { MailService } from '../mail/mail.service';
 import { PushNotificationsService } from '../push-notifications/push-notifications.service';
-import { EmployeeMemoService } from '../employee-memo/employee-memo.service';
-
 @Injectable()
 export class GenerateSalaryService {
   constructor(
     private prisma: PrismaService,
     private readonly pushService: PushNotificationsService,
     private readonly mailService: MailService,
-    private readonly employeeMemoService: EmployeeMemoService,
   ) {}
-
-  private employeeDisplayName(emp?: {
-    employeeFirstName?: string | null;
-    employeeLastName?: string | null;
-    employeeID?: string | null;
-  } | null): string {
-    if (!emp) return 'An employee';
-    const name = `${emp.employeeFirstName ?? ''} ${emp.employeeLastName ?? ''}`.trim();
-    return name || emp.employeeID || 'An employee';
-  }
-
-  private postPayrollCompanyBroadcast(record: {
-    companyID?: number | null;
-    branchesID?: number | null;
-    serviceProviderID?: number | null;
-    employeeID?: number | null;
-    monthPeriod: string;
-    manageEmployee?: {
-      employeeFirstName?: string | null;
-      employeeLastName?: string | null;
-      employeeID?: string | null;
-    } | null;
-    event: 'generated' | 'paid';
-  }): void {
-    if (!record.companyID) return;
-    const name = this.employeeDisplayName(record.manageEmployee);
-    const description =
-      record.event === 'paid'
-        ? `Salary paid: ${name} — ${record.monthPeriod}`
-        : `Payroll generated: ${name} — ${record.monthPeriod}`;
-    void this.employeeMemoService
-      .createSystemStaffBroadcast({
-        companyID: record.companyID,
-        branchesID: record.branchesID,
-        serviceProviderID: record.serviceProviderID,
-        subjectEmployeeIDs: record.employeeID ? [record.employeeID] : [],
-        description,
-      })
-      .catch(() => null);
-  }
 
   private async notifyPayslipGenerated(record: {
     employeeID: number;
@@ -161,7 +118,6 @@ export class GenerateSalaryService {
 
     void this.notifyPayslipGenerated(created).catch(() => null);
     void this.notifyPayslipEmail(created).catch(() => null);
-    this.postPayrollCompanyBroadcast({ ...created, event: 'generated' });
     return created;
   }
 
@@ -242,7 +198,6 @@ export class GenerateSalaryService {
     if (existing?.status !== 'Paid' && updated.status === 'Paid') {
       void this.notifyPayslipPaid(updated).catch(() => null);
       void this.notifyPayslipPaidEmail(updated).catch(() => null);
-      this.postPayrollCompanyBroadcast({ ...updated, event: 'paid' });
     }
 
     return updated;

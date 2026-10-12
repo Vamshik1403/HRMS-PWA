@@ -18,7 +18,8 @@ import { EmpManagerScopeService } from '../common/emp-manager-scope.service';
 import {
   COMPANY_BROADCAST_PREFIX,
   isCompanyBroadcastSubject,
-  isPersonalHrBroadcastDescription,
+  isPrivateApprovalBroadcastDescription,
+  isSalaryBroadcastDescription,
   personalHrDescriptionNamesViewer,
 } from './system-broadcast.util';
 
@@ -208,8 +209,8 @@ export class EmployeeMemoService {
   }
 
   /**
-   * Holidays and other company-wide notices. Personal HR events must use
-   * createSystemStaffBroadcast so they are not posted to every employee.
+   * Holidays, birthdays, and tasks. Leave, reimbursement, and loan notices
+   * use createSystemStaffBroadcast so they stay with the applicant and managers above them.
    */
   async createSystemCompanyBroadcast(opts: {
     companyID: number;
@@ -236,7 +237,7 @@ export class EmployeeMemoService {
     });
   }
 
-  /** Leave, payroll, and named task assignment — subject + managers + owners. */
+  /** Leave, reimbursement, and loan — the applicant plus every manager above them. */
   async createSystemStaffBroadcast(opts: {
     companyID: number;
     description: string;
@@ -256,21 +257,11 @@ export class EmployeeMemoService {
     ];
     const recipientIds = new Set<number>(subjectIds);
     for (const id of subjectIds) {
-      const managers = await this.managerScope.getManagerIdsForEmployee(id);
+      const managers = await this.managerScope.getAncestorManagerIds(id);
       for (const managerId of managers) {
         if (Number.isFinite(managerId) && managerId > 0) recipientIds.add(managerId);
       }
     }
-    const owners = await this.prisma.manageEmployee.findMany({
-      where: {
-        companyID,
-        isCompanyOwner: true,
-        isDeleted: false,
-        lifecycleStatus: 'ACTIVE',
-      },
-      select: { id: true },
-    });
-    for (const owner of owners) recipientIds.add(owner.id);
 
     await this.persistSystemBroadcast({
       companyID,
@@ -284,30 +275,28 @@ export class EmployeeMemoService {
   async filterSystemBroadcastsForViewer<
     T extends { subject?: string | null; description?: string | null },
   >(viewerEmployeeId: number, memos: T[]): Promise<T[]> {
-    const personal = memos.filter(
+    const needsPeople = memos.some(
       (m) =>
         isCompanyBroadcastSubject(m.subject) &&
-        isPersonalHrBroadcastDescription(m.description),
+        isPrivateApprovalBroadcastDescription(m.description),
     );
-    if (personal.length === 0) return memos;
-
-    const viewer = await this.prisma.manageEmployee.findUnique({
-      where: { id: viewerEmployeeId },
-      select: {
-        id: true,
-        isCompanyOwner: true,
-        employeeFirstName: true,
-        employeeLastName: true,
-        employeeID: true,
-      },
-    });
-    if (viewer?.isCompanyOwner) return memos;
-
-    const reporteeIds = await this.managerScope.getDirectReporteeIds(viewerEmployeeId);
-    const reportees =
-      reporteeIds.length > 0
+    const viewer = needsPeople
+      ? await this.prisma.manageEmployee.findUnique({
+          where: { id: viewerEmployeeId },
+          select: {
+            employeeFirstName: true,
+            employeeLastName: true,
+            employeeID: true,
+          },
+        })
+      : null;
+    const descendantIds = needsPeople
+      ? await this.managerScope.getDescendantReporteeIds(viewerEmployeeId)
+      : [];
+    const descendants =
+      descendantIds.length > 0
         ? await this.prisma.manageEmployee.findMany({
-            where: { id: { in: reporteeIds } },
+            where: { id: { in: descendantIds } },
             select: {
               employeeFirstName: true,
               employeeLastName: true,
@@ -318,11 +307,10 @@ export class EmployeeMemoService {
 
     return memos.filter((memo) => {
       if (!isCompanyBroadcastSubject(memo.subject)) return true;
-      if (!isPersonalHrBroadcastDescription(memo.description)) return true;
-      if (viewer && personalHrDescriptionNamesViewer(memo.description, viewer)) {
-        return true;
-      }
-      return reportees.some((r) => personalHrDescriptionNamesViewer(memo.description, r));
+      if (isSalaryBroadcastDescription(memo.description)) return false;
+      if (!isPrivateApprovalBroadcastDescription(memo.description)) return true;
+      if (viewer && personalHrDescriptionNamesViewer(memo.description, viewer)) return true;
+      return descendants.some((person) => personalHrDescriptionNamesViewer(memo.description, person));
     });
   }
 

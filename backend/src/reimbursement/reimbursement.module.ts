@@ -3,9 +3,10 @@ import { ReimbursementService } from './reimbursement.service';
 import { ReimbursementController } from './reimbursement.controller';
 import { PushNotificationsModule } from '../push-notifications/push-notifications.module';
 import { PrismaModule } from '../prisma/prisma.module';
+import { EmployeeMemoModule } from '../employee-memo/employee-memo.module';
 
 @Module({
-  imports: [PrismaModule, PushNotificationsModule],
+  imports: [PrismaModule, PushNotificationsModule, EmployeeMemoModule],
   controllers: [ReimbursementController],
   providers: [ReimbursementService],
 })

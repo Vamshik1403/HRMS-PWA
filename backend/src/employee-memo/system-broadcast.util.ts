@@ -8,10 +8,16 @@ export function isCompanyBroadcastSubject(subject?: string | null): boolean {
   );
 }
 
-/** Leave, payroll, reimbursement, and named task assignment — not for the whole company. */
-export function isPersonalHrBroadcastDescription(description?: string | null): boolean {
+/** Salary lines are never shown in the company chat. */
+export function isSalaryBroadcastDescription(description?: string | null): boolean {
   const d = (description || '').trim();
-  return /^(Leave |Payroll generated:|Salary paid:|Reimbursement |Task assigned:)/i.test(d);
+  return /^(Payroll generated:|Salary paid:)/i.test(d);
+}
+
+/** Leave, reimbursement, and loan notices are only for the applicant and managers above them. */
+export function isPrivateApprovalBroadcastDescription(description?: string | null): boolean {
+  const d = (description || '').trim();
+  return /^(Leave |Reimbursement |Loan advance )/i.test(d);
 }
 
 export function personalHrDescriptionNamesViewer(

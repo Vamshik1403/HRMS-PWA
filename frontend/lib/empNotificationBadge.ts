@@ -316,7 +316,7 @@ export async function fetchEmpSidebarBadgeCounts(
   const noticeLastViewed = readTs(NOTICE_LAST_VIEWED_KEY);
 
   // Same endpoints EmpTeamApprovalsPanel uses: employee/:selfId returns scoped rows
-  const [memos, leaveRows, reimbRows, homeBell] = await Promise.all([
+  const [memos, leaveRows, reimbRows, advanceRows, homeBell] = await Promise.all([
     fetch(`${BACKEND}/employee-memo?employeeID=${employeeId}`, { headers, cache: "no-store" })
       .then((r) => (r.ok ? r.json() : []))
       .catch(() => []),
@@ -324,6 +324,9 @@ export async function fetchEmpSidebarBadgeCounts(
       .then((r) => (r.ok ? r.json() : []))
       .catch(() => []),
     fetch(`${BACKEND}/reimbursement/employee/${employeeId}`, { headers, cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : []))
+      .catch(() => []),
+    fetch(`${BACKEND}/salary-advance/employee/${employeeId}`, { headers, cache: "no-store" })
       .then((r) => (r.ok ? r.json() : []))
       .catch(() => []),
     fetchBellBadgeCount(employeeId, token),
@@ -367,6 +370,7 @@ export async function fetchEmpSidebarBadgeCounts(
 
   const leaves = Array.isArray(leaveRows) ? leaveRows : [];
   const reimbs = Array.isArray(reimbRows) ? reimbRows : [];
+  const advances = Array.isArray(advanceRows) ? advanceRows : [];
 
   // Own leave/reimb badges — only the current employee's records (role: employee portal self)
   counts.leave = leaves.filter((l) => isOwnPendingUnseenLeave(l, employeeId)).length;
@@ -376,7 +380,12 @@ export async function fetchEmpSidebarBadgeCounts(
   if (isManager && reporteeIds.size > 0) {
     const pendingLeave = leaves.filter((l) => isTeamPendingLeave(l, employeeId, reporteeIds)).length;
     const pendingReimb = reimbs.filter((r) => isTeamPendingReimb(r, employeeId, reporteeIds)).length;
-    counts.approvals = pendingLeave + pendingReimb;
+    const pendingAdvance = advances.filter((row) => {
+      const ownerId = Number(row?.manageEmployeeID);
+      if (!Number.isFinite(ownerId) || ownerId === employeeId || !reporteeIds.has(ownerId)) return false;
+      return (row?.status || "Pending") === "Pending";
+    }).length;
+    counts.approvals = pendingLeave + pendingReimb + pendingAdvance;
   } else {
     counts.approvals = 0;
   }
