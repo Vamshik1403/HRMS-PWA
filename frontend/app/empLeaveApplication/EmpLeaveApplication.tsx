@@ -26,6 +26,8 @@ import { Badge } from "../components/ui/badge"
 import { Icon } from "@iconify/react"
 import { Plus, Search, Edit, Trash2, Check, X } from "lucide-react"
 import { useCurrentUser } from "../hooks/useCurrentUser"
+import { toast } from "sonner"
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error"
 import { getSidebarContext } from "../utils/sidebarContext"
 import { getPageCache, setPageCache } from "../utils/pageCache"
 import { isCompanyAdminLikeRole } from "@/lib/companyAccess";
@@ -419,7 +421,7 @@ export function EmpLeaveApplication() {
         body: JSON.stringify(leaveApplicationData),
       })
       if (!res.ok) {
-        throw new Error(`Failed to save leave application: ${res.status}`)
+        throw new Error(await readApiErrorMessage(res, "Failed to save leave application."))
       }
 
       await loadLeaveApplications()
@@ -427,6 +429,7 @@ export function EmpLeaveApplication() {
       setIsDialogOpen(false)
     } catch (error) {
       console.error("Error saving leave application:", error)
+      toast.error(messageFromUnknownError(error, "Failed to save leave application."))
     }
   }
 

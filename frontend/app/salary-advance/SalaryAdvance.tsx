@@ -22,6 +22,7 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { CompanyBranchField } from "../components/app/company-branch-field"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner"
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error"
 import { getSidebarContext } from "../utils/sidebarContext"
 import { resolveScopedCompanyId } from "../utils/scopeContext"
 
@@ -213,7 +214,7 @@ const resolvedBranchID = formData.branchesID;
 
   const robustFetch = useCallback(async (url: string, init?: RequestInit) => {
     const res = await fetch(url, init)
-    if (!res.ok) throw new Error(`${res.status}`)
+    if (!res.ok) throw new Error(await readApiErrorMessage(res, `Request failed (${res.status})`))
     return res.json().catch(() => ({}))
   }, [])
 
@@ -625,7 +626,7 @@ const fetchCompanies = useCallback(
       toast.success("Salary advance saved successfully")
     } catch (error) {
       console.error("Failed to save advance:", error)
-      toast.error("Failed to save salary advance. Please try again.")
+      toast.error(messageFromUnknownError(error, "Failed to save salary advance. Please try again."))
     } finally {
       setSubmitting(false)
     }
@@ -685,7 +686,7 @@ const fetchCompanies = useCallback(
       toast.success("Salary advance deleted successfully")
     } catch (error) {
       console.error("Failed to delete advance:", error)
-      toast.error("Failed to delete salary advance. Please try again.")
+      toast.error(messageFromUnknownError(error, "Failed to delete salary advance. Please try again."))
     }
   }, [robustFetch, loadAdvances])
 

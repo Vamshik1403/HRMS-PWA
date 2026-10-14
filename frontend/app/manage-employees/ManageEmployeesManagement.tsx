@@ -55,6 +55,7 @@ import {
 import { FormDrawer } from "../components/ui/form-drawer";
 import { NoticeBanner } from "../components/ui/notice-banner";
 import { toast } from "sonner";
+import { humanizeApiMessage, messageFromUnknownError } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
   CollapsibleFormGroup,
@@ -399,16 +400,12 @@ async function readApiError(
     const parsed = JSON.parse(raw);
 
     if (Array.isArray(parsed?.message)) {
-      return parsed.message.join(", ");
+      return humanizeApiMessage(parsed.message) || fallback;
     }
 
-    return (
-      parsed?.message ||
-      parsed?.error ||
-      fallback
-    );
+    return humanizeApiMessage(parsed?.message || parsed?.error, parsed?.statusCode) || fallback;
   } catch {
-    return raw || fallback;
+    return humanizeApiMessage(raw) || fallback;
   }
 }
 
@@ -713,7 +710,7 @@ export function ManageEmployeesManagement() {
         }),
       });
 
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await readApiError(res, "Failed to save credentials"));
 
       toast.success("Employee credentials saved");
       setCredentialModalOpen(false);
@@ -722,7 +719,7 @@ export function ManageEmployeesManagement() {
       await fetchRows();
     } catch (err) {
       console.error(err);
-      toast.error("Failed to save credentials");
+      toast.error(messageFromUnknownError(err, "Failed to save credentials"));
     } finally {
       setCredentialSaving(false);
     }
@@ -2925,6 +2922,7 @@ const addCombinedDevMap = () => {
     if (!formData.employeeLastName?.trim()) validationErrors.push("Employee Last Name is mandatory");
     if (!isAdmin && !primaryMultiValue(formData.personalPhones).trim()) validationErrors.push("Mobile Number is mandatory");
     if (!isAdmin && !formData.joiningDate?.trim()) validationErrors.push("Joining Date is mandatory");
+    if (linkedEmployees.length === 0) validationErrors.push("Manager is mandatory");
 
     // Duplicate Employee ID check (within the same company) — only relevant when editing,
     // since new employees get an auto-generated, non-editable ID from the backend.
@@ -4724,7 +4722,7 @@ const handleCancel = () => {
               {/* Manager - Multi-entry repeater */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold">Manager</h3>
+                  <h3 className="text-lg font-semibold">Manager <span className="text-red-500">*</span></h3>
                   <Button variant="outline" size="sm" type="button" onClick={() => { setShowManagerSearch(true); setLinkedEmpSearch(""); setLinkedEmpSuggestions([]); }}>
                     <Plus className="w-4 h-4 mr-1" /> Add Manager
                   </Button>

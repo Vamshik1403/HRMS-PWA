@@ -20,6 +20,7 @@ import { Plus, Search, Edit, Trash2, MapPin } from "lucide-react"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { CompanyBranchField } from "../components/app/company-branch-field"
 import { toast } from "sonner"
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error"
 import { getSidebarContext } from "../utils/sidebarContext"
 
 interface FieldAttendanceSchedule {
@@ -302,7 +303,7 @@ createdAt: schedule.createdAt
         body: JSON.stringify(fieldAttendanceScheduleData),
       })
       if (!res.ok) {
-        throw new Error(`Failed to save field attendance schedule: ${res.status}`)
+        throw new Error(await readApiErrorMessage(res, "Failed to save schedule"))
       }
 
       await loadFieldAttendanceSchedules()
@@ -311,7 +312,7 @@ createdAt: schedule.createdAt
       toast.success("Schedule saved successfully")
     } catch (error) {
       console.error("Error saving field attendance schedule:", error)
-      toast.error((error as any)?.message || "Failed to save schedule")
+      toast.error(messageFromUnknownError(error, "Failed to save schedule"))
     }
   }
 
@@ -369,13 +370,13 @@ createdAt: schedule.createdAt
         method: "DELETE",
       })
       if (!res.ok) {
-        throw new Error(`Failed to delete field attendance schedule: ${res.status}`)
+        throw new Error(await readApiErrorMessage(res, "Failed to delete schedule"))
       }
       await loadFieldAttendanceSchedules()
       toast.success("Schedule deleted successfully")
     } catch (error) {
       console.error("Error deleting field attendance schedule:", error)
-      toast.error((error as any)?.message || "Failed to delete schedule")
+      toast.error(messageFromUnknownError(error, "Failed to delete schedule"))
     }
   }
 

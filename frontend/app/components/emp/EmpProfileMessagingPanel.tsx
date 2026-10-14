@@ -288,7 +288,10 @@ function initialsFromName(name: string) {
 }
 
 function messagePreview(m: MemoItem) {
-  return (m.description || m.subject || m.title || "No message").trim();
+  const text = (m.description || "").trim();
+  if (text) return text;
+  if (m.attachmentPath) return "Attachment";
+  return (m.subject || m.title || "No message").trim();
 }
 
 function memoTimestamp(m: MemoItem | MemoReply) {
@@ -1729,7 +1732,11 @@ export function EmpProfileMessagingPanel({
       bubbles.push({
         id: memo.id,
         threadMemoId: memo.id,
-        text: memo.description || memo.subject || "",
+        text: (memo.description || "").trim()
+          ? memo.description || ""
+          : memo.attachmentPath
+            ? ""
+            : memo.subject || "",
         isOutgoing: isSent(memo),
         senderName: memo.issuedBy?.trim() || "User",
         createdAt: memoTimestamp(memo),
@@ -1871,7 +1878,7 @@ export function EmpProfileMessagingPanel({
   const sendMessage = async () => {
     const text = draft.trim();
     const self = normalizeId(employeeId);
-    if (!text || !canCompose || !selectedConversation) return;
+    if ((!text && !attachmentFile) || !canCompose || !selectedConversation) return;
 
     if (selectedConversation.kind === "broadcast") {
       if (!canComposeBroadcast) {
@@ -2492,7 +2499,9 @@ export function EmpProfileMessagingPanel({
                             {selectedConversation.kind === "group" && !bubble.isOutgoing ? (
                               <p className="mb-1 text-[11px] font-semibold text-primary">{bubble.senderName}</p>
                             ) : null}
-                            <p className="whitespace-pre-wrap text-[14px] leading-relaxed">{bubble.text}</p>
+                            {bubble.text ? (
+                              <p className="whitespace-pre-wrap text-[14px] leading-relaxed">{bubble.text}</p>
+                            ) : null}
                             {bubble.attachmentPath ? (
                               <AttachmentPreview path={bubble.attachmentPath} />
                             ) : null}
@@ -2582,7 +2591,7 @@ export function EmpProfileMessagingPanel({
                 </div>
                 <button
                   type="button"
-                  disabled={sending || !draft.trim()}
+                  disabled={sending || (!draft.trim() && !attachmentFile)}
                   onClick={() => void sendMessage()}
                   className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white transition-all duration-[120ms] hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Send message"

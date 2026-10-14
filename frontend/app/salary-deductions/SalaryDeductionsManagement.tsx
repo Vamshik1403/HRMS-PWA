@@ -16,6 +16,7 @@ import { EntityRowActions } from "../components/app/entity-row-actions";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
   canDesktopManagerManage,
@@ -419,6 +420,7 @@ const loadDeductions = async () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."));
         const updated: ApiSalaryDeduction = await res.json();
         setDeductions((prev) => prev.map((d) => (d.id === String(updated.id) ? mapApiToUi(updated) : d)));
       } else {
@@ -427,6 +429,7 @@ const loadDeductions = async () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."));
         const created: ApiSalaryDeduction = await res.json();
         setDeductions((prev) => [mapApiToUi(created), ...prev]);
       }
@@ -435,7 +438,7 @@ const loadDeductions = async () => {
       toast.success(editingDeduction ? "Updated successfully" : "Created successfully");
     } catch (e) {
       console.error("Save failed", e);
-      toast.error("Failed to save. Please try again.");
+      toast.error(messageFromUnknownError(e, "Failed to save. Please try again."));
     }
   };
 
@@ -461,12 +464,13 @@ const loadDeductions = async () => {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`${API.deduction}/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API.deduction}/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to delete. Please try again."));
       setDeductions((prev) => prev.filter((d) => d.id !== id));
       toast.success("Deduction deleted successfully");
     } catch (e) {
       console.error("Delete failed", e);
-      toast.error("Failed to delete. Please try again.");
+      toast.error(messageFromUnknownError(e, "Failed to delete. Please try again."));
     }
   };
 

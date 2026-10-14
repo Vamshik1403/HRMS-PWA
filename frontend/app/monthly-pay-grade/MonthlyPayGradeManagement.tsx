@@ -16,6 +16,7 @@ import { EntityRowActions } from "../components/app/entity-row-actions";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { AutocompleteBranchField } from "../components/app/autocomplete-branch-field";
 import {
@@ -703,6 +704,7 @@ miniOTTime: x.miniOTTime ?? 0,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."));
         const updated: ApiMPG = await res.json();
         setPayGrades((prev) => prev.map((p) => (p.id === String(updated.id) ? mapApiToUi(updated) : p)));
       } else {
@@ -711,6 +713,7 @@ miniOTTime: x.miniOTTime ?? 0,
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."));
         const created: ApiMPG = await res.json();
         setPayGrades((prev) => [mapApiToUi(created), ...prev]);
       }
@@ -719,7 +722,7 @@ miniOTTime: x.miniOTTime ?? 0,
       toast.success(editingPayGrade ? "Updated successfully" : "Created successfully");
     } catch (e) {
       console.error("Save failed", e);
-      toast.error("Failed to save. Please try again.");
+      toast.error(messageFromUnknownError(e, "Failed to save. Please try again."));
     }
   };
 
@@ -749,12 +752,13 @@ miniOTTime: x.miniOTTime ?? 0,
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`${API.mpg}/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API.mpg}/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to delete. Please try again."));
       setPayGrades((prev) => prev.filter((p) => p.id !== id));
       toast.success("Pay grade deleted successfully");
     } catch (e) {
       console.error("Delete failed", e);
-      toast.error("Failed to delete. Please try again.");
+      toast.error(messageFromUnknownError(e, "Failed to delete. Please try again."));
     }
   };
 

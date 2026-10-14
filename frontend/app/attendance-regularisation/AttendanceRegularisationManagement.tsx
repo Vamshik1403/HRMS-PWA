@@ -16,6 +16,7 @@ import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
+import { readApiErrorMessage } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { useCompanyBranches } from "../hooks/useCompanyBranches";
 import { formatDevicePunchForDisplay } from "../utils/devicePunchTime";
@@ -1942,12 +1943,7 @@ if (
       })
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        const message =
-          errorData?.message ||
-          `Failed to save attendance regularisation: ${res.status}`
-
-        toast.error(message)
+        toast.error(await readApiErrorMessage(res, "Failed to save attendance regularisation."))
         return
       }
 

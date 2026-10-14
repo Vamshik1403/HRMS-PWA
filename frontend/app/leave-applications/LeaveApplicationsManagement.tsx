@@ -21,6 +21,7 @@ import { formatDateShort, getDisplayLeaveStatus } from "../utils/leaveDisplay"
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { SearchSuggestInput } from "../components/SearchSuggestInput"
 import { toast } from "sonner";
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { useCompanyBranches } from "../hooks/useCompanyBranches";
 
@@ -1586,7 +1587,7 @@ useEffect(() => {
         body: JSON.stringify(leaveApplicationData),
       })
       if (!res.ok) {
-        throw new Error(`Failed to save leave application: ${res.status}`)
+        throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."))
       }
 
       await loadLeaveApplications()
@@ -1595,7 +1596,7 @@ useEffect(() => {
       toast.success(editingApplication ? "Updated successfully" : "Created successfully");
     } catch (error) {
       console.error("Error saving leave application:", error)
-      toast.error("Failed to save. Please try again.");
+      toast.error(messageFromUnknownError(error, "Failed to save. Please try again."));
     }
   }
 
@@ -1677,14 +1678,13 @@ useEffect(() => {
         method: "DELETE",
       })
       if (!res.ok) {
-        const errText = await res.text().catch(() => "")
-        throw new Error(`Failed to delete leave application: ${res.status} ${errText}`)
+        throw new Error(await readApiErrorMessage(res, "Failed to delete. Please try again."))
       }
       await loadLeaveApplications()
       toast.success("Deleted successfully");
     } catch (error) {
       console.error("Error deleting leave application:", error)
-      toast.error("Failed to delete. Please try again.");
+      toast.error(messageFromUnknownError(error, "Failed to delete. Please try again."));
     }
   }
 

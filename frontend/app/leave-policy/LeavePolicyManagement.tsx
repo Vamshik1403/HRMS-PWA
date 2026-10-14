@@ -230,64 +230,41 @@ useEffect(() => {
   })();
 }, [user, formData.branchesID, formData.branchName]);
 
-// Load available holidays with RBAC filtering
+// Current public holidays only. The holiday-name catalog keeps deleted names.
 const loadAvailableHolidays = async () => {
   try {
-    const res = await fetch(`${BACKEND_URL}/manage-holiday`);
+    const companyID =
+      resolveScopedCompanyId(user) ??
+      formData.companyID ??
+      currentUserMapping?.companyID ??
+      user?.companyID ??
+      null;
+    if (!companyID) {
+      setAvailableHolidays([]);
+      return;
+    }
+
+    const res = await fetch(`${BACKEND_URL}/public-holiday`);
+    if (!res.ok) {
+      toast.error(await readApiErrorMessage(res, "Failed to load holidays."));
+      setAvailableHolidays([]);
+      return;
+    }
     const raw = await res.json();
-
     let list = Array.isArray(raw) ? raw : [];
+    list = list.filter((h: any) => Number(h.companyID) === Number(companyID));
 
-    // ✅ SUPERADMIN: filter by selected company + branch (only if selected)
-    if (user?.role === "SUPERADMIN") {
-      if (formData.companyID && formData.branchesID) {
-        list = list.filter(
-          (h: any) =>
-            h.companyID === formData.companyID &&
-            h.branchesID === formData.branchesID
-        );
-      } else {
-        // if no selection, show nothing (or show all if you want)
-        list = [];
-      }
+    const branchID = Number(formData.branchesID);
+    if (Number.isFinite(branchID) && branchID > 0) {
+      list = list.filter((h: any) => Number(h.branchesID) === branchID);
     }
 
-    // ✅ MANAGER: filter by /users mapping (already your logic)
-    else if (user?.role === "SERVICE_PROVIDER") {
-      const usersRes = await fetch(`${BACKEND_URL}/users`);
-      const users = await usersRes.json();
-      const me = users.find((u: any) => u.username === user.username);
-
-      if (me) {
-        list = list.filter(
-          (h: any) => h.companyID === me.companyID && h.branchesID === me.branchesID
-        );
-      } else {
-        list = [];
-      }
-    }
-
-    // ✅ EMPLOYEE: filter by credentials mapping (already your logic)
-    else {
-      const credsRes = await fetch(`${BACKEND_URL}/manage-emp/credentials/all`);
-      const creds = await credsRes.json();
-      const emp = creds.find((c: any) => c.username === user?.username);
-
-      if (emp) {
-        list = list.filter(
-          (h: any) => h.companyID === emp.companyID && h.branchesID === emp.branchesID
-        );
-      } else {
-        list = [];
-      }
-    }
-
-    // dedupe by holiday name
+    // Checkbox id stays the manage-holiday id the leave policy save already sends.
     const map = new Map<string, number>();
     list.forEach((h: any) => {
-      const name = (h?.holidayName || "").trim();
-      const id = typeof h?.id === "number" ? h.id : undefined;
-      if (name && id && !map.has(name)) map.set(name, id);
+      const name = (h?.manageHoliday?.holidayName || "").trim();
+      const id = Number(h?.manageHolidayID);
+      if (name && Number.isFinite(id) && id > 0 && !map.has(name)) map.set(name, id);
     });
 
     const mapped: Holiday[] = Array.from(map.entries()).map(([name, id]) => ({
@@ -559,13 +536,9 @@ setPolicies(filteredPolicies);
   };
 
  useEffect(() => {
-  if (!user) return;
-
-  // Only reload holidays on selection for SUPERADMIN
-  if (user.role === "SUPERADMIN") {
-    loadAvailableHolidays();
-  }
-}, [formData.companyID, formData.branchesID, user]);
+  if (!user || !isDialogOpen) return;
+  void loadAvailableHolidays();
+}, [formData.companyID, formData.branchesID, user, isDialogOpen, currentUserMapping]);
 
 
   const filteredPolicies = useMemo(() => {

@@ -20,6 +20,7 @@ import { useClientTable, sortRows } from "../hooks/use-client-table";
 import jsPDF from "jspdf";
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error";
 import { getActiveCompanyId, getSidebarContext } from "../utils/sidebarContext";
 import { dispatchAppRefresh, registerDataCacheClearer } from "../utils/appRefresh";
 import { useListAutoRefresh } from "../hooks/useListAutoRefresh";
@@ -2099,14 +2100,14 @@ export function GenerateSalaryManagement() {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await readApiErrorMessage(res, "Payment update failed."));
       toast.success("Payment marked successfully!");
       setIsPaymentDialogOpen(false);
       await fetchAll();
       dispatchAppRefresh();
     } catch (error) {
       console.error("Payment update failed:", error);
-      toast.error("Payment update failed: " + (error as any).message);
+      toast.error(messageFromUnknownError(error, "Payment update failed."));
     }
   }
 
@@ -2123,6 +2124,23 @@ export function GenerateSalaryManagement() {
     };
 
     try {
+      const empRes = await fetch(`/backend/manage-emp/${formData.employeeDbID}`, { cache: "no-store" });
+      if (!empRes.ok) {
+        toast.error(await readApiErrorMessage(empRes, "Could not load this employee."));
+        return;
+      }
+      const employee = await empRes.json();
+      const missing: string[] = [];
+      if (!employee?.monthlyPayGradeID) missing.push("a pay grade");
+      if (!employee?.salaryCycleID) missing.push("a salary cycle");
+      if (missing.length > 0) {
+        const label = missing.join(" and ");
+        toast.error(
+          `This employee does not have ${label}. Set ${missing.length > 1 ? "them" : "it"} on the employee before running payroll.`,
+        );
+        return;
+      }
+
       const res = await fetch(
         editing ? `${API.generateSalary}/${editing.id}` : API.generateSalary,
         {
@@ -2131,7 +2149,7 @@ export function GenerateSalaryManagement() {
           body: JSON.stringify(payload),
         }
       );
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."));
       await fetchAll();
       resetForm();
       setIsDialogOpen(false);
@@ -2139,7 +2157,7 @@ export function GenerateSalaryManagement() {
       dispatchAppRefresh();
     } catch (err) {
       console.error("Save failed:", err);
-      toast.error("Failed to save. Please try again.");
+      toast.error(messageFromUnknownError(err, "Failed to save. Please try again."));
     }
   }
 
@@ -2147,13 +2165,13 @@ export function GenerateSalaryManagement() {
     if (!confirm("Delete this record?")) return;
     try {
       const res = await fetch(`${API.generateSalary}/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to delete. Please try again."));
       await fetchAll();
       toast.success("Deleted successfully");
       dispatchAppRefresh();
     } catch (e) {
       console.error("Delete failed:", e);
-      toast.error("Failed to delete. Please try again.");
+      toast.error(messageFromUnknownError(e, "Failed to delete. Please try again."));
     }
   }
 

@@ -16,6 +16,7 @@ import { EntityRowActions } from "../components/app/entity-row-actions";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
   canDesktopManagerManage,
@@ -422,6 +423,7 @@ const handler = () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."));
         const updated: ApiSalaryAllowance = await res.json();
         setAllowances((prev) => prev.map((a) => (a.id === String(updated.id) ? mapApiToUi(updated) : a)));
       } else {
@@ -430,6 +432,7 @@ const handler = () => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."));
         const created: ApiSalaryAllowance = await res.json();
         setAllowances((prev) => [mapApiToUi(created), ...prev]);
       }
@@ -438,7 +441,7 @@ const handler = () => {
       toast.success(editingAllowance ? "Updated successfully" : "Created successfully");
     } catch (e) {
       console.error("Save failed", e);
-      toast.error("Failed to save. Please try again.");
+      toast.error(messageFromUnknownError(e, "Failed to save. Please try again."));
     }
   };
 
@@ -465,12 +468,13 @@ const handler = () => {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`${API.allowance}/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API.allowance}/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to delete. Please try again."));
       setAllowances((prev) => prev.filter((a) => a.id !== id));
       toast.success("Allowance deleted successfully");
     } catch (e) {
       console.error("Delete failed", e);
-      toast.error("Failed to delete. Please try again.");
+      toast.error(messageFromUnknownError(e, "Failed to delete. Please try again."));
     }
   };
 

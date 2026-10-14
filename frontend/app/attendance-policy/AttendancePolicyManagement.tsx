@@ -17,6 +17,7 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { CompanyBranchField } from "../components/app/company-branch-field";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
   canDesktopManagerManage,
@@ -551,7 +552,7 @@ useEffect(() => {
         body: JSON.stringify(attendancePolicyData),
       });
       if (!res.ok) {
-        throw new Error(`Failed to save attendance policy: ${res.status}`);
+        throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."));
       }
 
       await loadAttendancePolicies();
@@ -560,7 +561,7 @@ useEffect(() => {
       toast.success(editingPolicy ? "Updated successfully" : "Created successfully");
     } catch (error) {
       console.error("Error saving attendance policy:", error);
-      toast.error("Failed to save. Please try again.");
+      toast.error(messageFromUnknownError(error, "Failed to save. Please try again."));
     }
   };
 
@@ -691,13 +692,13 @@ useEffect(() => {
         method: "DELETE",
       });
       if (!res.ok) {
-        throw new Error(`Failed to delete attendance policy: ${res.status}`);
+        throw new Error(await readApiErrorMessage(res, "Failed to delete. Please try again."));
       }
       await loadAttendancePolicies();
       toast.success("Deleted successfully");
     } catch (error) {
       console.error("Error deleting attendance policy:", error);
-      toast.error("Failed to delete. Please try again.");
+      toast.error(messageFromUnknownError(error, "Failed to delete. Please try again."));
     }
   };
 

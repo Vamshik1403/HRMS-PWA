@@ -18,6 +18,7 @@ import { SearchSuggestInput } from "../components/SearchSuggestInput";
 import { CompanyBranchField } from "../components/app/company-branch-field";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error";
 import { getWorkShiftTypeLabel } from "../utils/workShiftLabels";
 import { getSidebarContext } from "../utils/sidebarContext";
 import {
@@ -629,7 +630,7 @@ const workShiftData = {
         body: JSON.stringify(workShiftData),
       });
       if (!res.ok) {
-        throw new Error(`Failed to save work shift: ${res.status}`);
+        throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."));
       }
 
 await loadWorkShifts();
@@ -639,7 +640,7 @@ await loadBranchFilterList();
       toast.success(editingWorkShift ? "Updated successfully" : "Created successfully");
     } catch (error) {
       console.error("Error saving work shift:", error);
-      toast.error("Failed to save. Please try again.");
+      toast.error(messageFromUnknownError(error, "Failed to save. Please try again."));
     }
   };
 
@@ -728,13 +729,13 @@ await loadBranchFilterList();
         method: "DELETE",
       });
       if (!res.ok) {
-        throw new Error(`Failed to delete work shift: ${res.status}`);
+        throw new Error(await readApiErrorMessage(res, "Failed to delete. Please try again."));
       }
       await loadWorkShifts();
       toast.success("Deleted successfully");
     } catch (error) {
       console.error("Error deleting work shift:", error);
-      toast.error("Failed to delete. Please try again.");
+      toast.error(messageFromUnknownError(error, "Failed to delete. Please try again."));
     }
   };
 

@@ -25,6 +25,7 @@ import { EntityRowActions } from "../components/app/entity-row-actions";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser"
 import { toast } from "sonner";
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext"
 
 const BACKEND_URL = "/backend"
@@ -259,26 +260,25 @@ export function PrivilegedLeaveManagement() {
         branchesID: selectedEmp?.branchesID ?? user?.branchesID ?? null,
       }
 
-      if (editingEntry) {
-        await fetch(`${BACKEND_URL}/privileged-leave/${editingEntry.id}`, {
+      const res = editingEntry
+        ? await fetch(`${BACKEND_URL}/privileged-leave/${editingEntry.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         })
-      } else {
-        await fetch(`${BACKEND_URL}/privileged-leave`, {
+        : await fetch(`${BACKEND_URL}/privileged-leave`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         })
-      }
+      if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."))
       await loadLedger()
       setIsDialogOpen(false)
       toast.success(editingEntry ? "Updated successfully" : "Created successfully");
       resetForm()
     } catch (err) {
       console.error("Error saving PL entry:", err)
-      toast.error("Failed to save. Please try again.");
+      toast.error(messageFromUnknownError(err, "Failed to save. Please try again."));
     }
   }
 
@@ -399,12 +399,13 @@ export function PrivilegedLeaveManagement() {
 
   const handleDelete = async (id: number) => {
     try {
-      await fetch(`${BACKEND_URL}/privileged-leave/${id}`, { method: "DELETE" })
+      const res = await fetch(`${BACKEND_URL}/privileged-leave/${id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to delete. Please try again."))
       await loadLedger()
       toast.success("Deleted successfully");
     } catch (err) {
       console.error("Error deleting PL entry:", err)
-      toast.error("Failed to delete. Please try again.");
+      toast.error(messageFromUnknownError(err, "Failed to delete. Please try again."));
     }
   }
 

@@ -16,6 +16,7 @@ import { EntityRowActions } from "../components/app/entity-row-actions";
 import { useClientTable, sortRows } from "../hooks/use-client-table";
 import { useCurrentUser } from "../hooks/useCurrentUser";
 import { toast } from "sonner";
+import { messageFromUnknownError, readApiErrorMessage } from "../utils/api-error";
 import { getSidebarContext } from "../utils/sidebarContext";
 import { AutocompleteBranchField } from "../components/app/autocomplete-branch-field";
 import {
@@ -376,6 +377,7 @@ const runFetchBR = debounce(async (val: string) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."));
         const updated: ApiSalaryCycle = await res.json();
         setCycles(prev =>
           prev.map(c => (c.id === String(updated.id) ? mapApiToUi(updated) : c))
@@ -386,6 +388,7 @@ const runFetchBR = debounce(async (val: string) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to save. Please try again."));
         const created: ApiSalaryCycle = await res.json();
         setCycles(prev => [mapApiToUi(created), ...prev]);
       }
@@ -394,7 +397,7 @@ const runFetchBR = debounce(async (val: string) => {
       toast.success(editingCycle ? "Updated successfully" : "Created successfully");
     } catch (e) {
       console.error("Save failed", e);
-      toast.error("Failed to save. Please try again.");
+      toast.error(messageFromUnknownError(e, "Failed to save. Please try again."));
     }
   };
 
@@ -417,12 +420,13 @@ const runFetchBR = debounce(async (val: string) => {
 
   const handleDelete = async (id: string) => {
     try {
-      await fetch(`${API.salaryCycle}/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API.salaryCycle}/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(await readApiErrorMessage(res, "Failed to delete. Please try again."));
       setCycles(prev => prev.filter(c => c.id !== id));
       toast.success("Salary cycle deleted successfully");
     } catch (e) {
       console.error("Delete failed", e);
-      toast.error("Failed to delete. Please try again.");
+      toast.error(messageFromUnknownError(e, "Failed to delete. Please try again."));
     }
   };
 
