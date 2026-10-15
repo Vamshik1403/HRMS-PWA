@@ -26,7 +26,11 @@ import {
   limitPermissionsToPlan,
   loadEmployeePermissions,
 } from '../common/employee-permission.util';
-import { PRODUCT_MODULE_CATALOG } from '../common/product-modules';
+import {
+  OFF_BOARDING_MODULE,
+  ONBOARDING_MODULE,
+  PRODUCT_MODULE_CATALOG,
+} from '../common/product-modules';
 import {
   getMutuallyLinkedCompanyIds,
   normalizeFederalDomainCode,
@@ -978,6 +982,7 @@ export class CompanyService {
   }
 
   async getAllModules() {
+    await this.ensureModuleCatalog();
     return this.prisma.module.findMany({
       orderBy: {
         sortOrder: 'asc',
@@ -985,10 +990,8 @@ export class CompanyService {
     });
   }
 
-  async seedDefaultModules() {
-    const modules = PRODUCT_MODULE_CATALOG;
-
-    for (const item of modules) {
+  private async ensureModuleCatalog() {
+    for (const item of PRODUCT_MODULE_CATALOG) {
       await this.prisma.module.upsert({
         where: {
           moduleKey: item.moduleKey,
@@ -1003,7 +1006,30 @@ export class CompanyService {
         },
       });
     }
+    await this.linkOnboardingToOffboardingPlans();
+  }
 
+  /** Plans that already include Off Boarding also include Onboarding. */
+  private async linkOnboardingToOffboardingPlans() {
+    const [onboarding, offboarding] = await Promise.all([
+      this.prisma.module.findUnique({ where: { moduleKey: ONBOARDING_MODULE } }),
+      this.prisma.module.findUnique({ where: { moduleKey: OFF_BOARDING_MODULE } }),
+    ]);
+    if (!onboarding || !offboarding) return;
+    const plans = await this.prisma.subscriptionPlanModule.findMany({
+      where: { moduleID: offboarding.id },
+      select: { planID: true },
+    });
+    for (const row of plans) {
+      await this.prisma.subscriptionPlanModule.upsert({
+        where: { planID_moduleID: { planID: row.planID, moduleID: onboarding.id } },
+        update: {},
+        create: { planID: row.planID, moduleID: onboarding.id },
+      });
+    }
+  }
+
+  async seedDefaultModules() {
     return this.getAllModules();
   }
 

@@ -1,7 +1,5 @@
-import { CompanyModulesManagement } from "./CompanyModuleTable";
+import { redirect } from "next/navigation";
 
 export default function CompanyModulesPage() {
-  return (
-    <CompanyModulesManagement />
-  )
+  redirect("/subscription");
 }

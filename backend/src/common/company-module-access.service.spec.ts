@@ -54,18 +54,19 @@ describe('CompanyModuleAccessService', () => {
     await expect(svc.assertSessionAllowed(9, 'EMPLOYEE')).rejects.toBeInstanceOf(UnauthorizedException);
   });
 
-  it('allows exempt companies 2 and 3 with every product module and no subscription row', async () => {
-    const findFirst = jest.fn();
-    const svc = new CompanyModuleAccessService({ companySubscription: { findFirst } } as any);
+  it('requires a subscription for every company, including 2 and 3', async () => {
+    const { svc, prisma } = serviceWith(null);
     for (const companyId of [2, 3]) {
       const decision = await svc.evaluate(companyId);
-      expect(decision.ok).toBe(true);
-      expect(decision.isSubscriptionExempt).toBe(true);
-      expect(decision.subscriptionRequired).toBe(false);
-      expect(decision.modules).toEqual(ALL_PRODUCT_MODULE_KEYS);
+      expect(decision.ok).toBe(false);
+      expect(decision.isSubscriptionExempt).toBe(false);
+      expect(decision.subscriptionRequired).toBe(true);
+      expect(decision.modules).toEqual([]);
     }
-    expect(findFirst).not.toHaveBeenCalled();
-    await expect(svc.assertLoginAllowed(2, 'EMPLOYEE')).resolves.toBeUndefined();
+    expect(prisma.companySubscription.findFirst).toHaveBeenCalled();
+    await expect(svc.assertLoginAllowed(2, 'EMPLOYEE')).rejects.toMatchObject({
+      message: 'NO_ACTIVE_SUBSCRIPTION',
+    });
   });
 
   it('does not apply the subscription check to superadmin', async () => {

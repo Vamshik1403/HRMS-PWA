@@ -1,6 +1,7 @@
 /** Product subscription modules. Bundles are UI groupings only. */
 
-export const SUBSCRIPTION_EXEMPT_COMPANY_IDS = [2, 3] as const;
+/** No company is exempt. Every tenant follows the plan assigned to it. */
+export const SUBSCRIPTION_EXEMPT_COMPANY_IDS = [] as const;
 
 export const ATTENDANCE_MODULE = 'ATTENDANCE_MODULE';
 export const ATTENDANCE_HISTORY_MODULE = 'ATTENDANCE_HISTORY_MODULE';
@@ -27,6 +28,12 @@ export const CONTRACTOR_MODULE = 'CONTRACTOR_MODULE';
 export const ADVANCE_REPORTING_MODULE = 'ADVANCE_REPORTING_MODULE';
 export const LEAVE_MODULE = 'LEAVE_MODULE';
 export const EMPLOYEE_MANAGEMENT_MODULE = 'EMPLOYEE_MANAGEMENT_MODULE';
+export const ONBOARDING_MODULE = 'ONBOARDING_MODULE';
+export const WORKFLOW_MODULE = 'WORKFLOW_MODULE';
+export const DOCUMENTS_MODULE = 'DOCUMENTS_MODULE';
+export const TAX_COMPLIANCE_MODULE = 'TAX_COMPLIANCE_MODULE';
+export const CRM_MODULE = 'CRM_MODULE';
+export const ASSET_MANAGEMENT_MODULE = 'ASSET_MANAGEMENT_MODULE';
 
 export const ATTENDANCE_CORE_MODULE_KEYS = [
   ATTENDANCE_MODULE,
@@ -42,6 +49,7 @@ export const ATTENDANCE_CORE_MODULE_KEYS = [
   TRANSFERS_MODULE,
   EMPLOYEE_MANAGEMENT_MODULE,
   OFF_BOARDING_MODULE,
+  ONBOARDING_MODULE,
 ] as const;
 
 export const ADDON_MODULE_KEYS = [
@@ -53,6 +61,8 @@ export const ADDON_MODULE_KEYS = [
   IM_MODULE,
   TASK_MODULE,
   ONFIELD_TASK_MODULE,
+  WORKFLOW_MODULE,
+  DOCUMENTS_MODULE,
 ] as const;
 
 export const PRODUCT_MODULE_CATALOG: { moduleKey: string; moduleName: string; sortOrder: number }[] = [
@@ -81,6 +91,12 @@ export const PRODUCT_MODULE_CATALOG: { moduleKey: string; moduleName: string; so
   { moduleKey: LOAN_ADVANCE_MODULE, moduleName: 'Loan Advances', sortOrder: 23 },
   { moduleKey: LEAVE_MODULE, moduleName: 'Leave', sortOrder: 24 },
   { moduleKey: EMPLOYEE_MANAGEMENT_MODULE, moduleName: 'Employee Management', sortOrder: 25 },
+  { moduleKey: ONBOARDING_MODULE, moduleName: 'Onboarding', sortOrder: 26 },
+  { moduleKey: WORKFLOW_MODULE, moduleName: 'Workflow Management', sortOrder: 27 },
+  { moduleKey: DOCUMENTS_MODULE, moduleName: 'Documents & Templates', sortOrder: 28 },
+  { moduleKey: TAX_COMPLIANCE_MODULE, moduleName: 'Tax & Compliance', sortOrder: 29 },
+  { moduleKey: CRM_MODULE, moduleName: 'CRM', sortOrder: 30 },
+  { moduleKey: ASSET_MANAGEMENT_MODULE, moduleName: 'Asset Management', sortOrder: 31 },
 ];
 
 export const ALL_PRODUCT_MODULE_KEYS = PRODUCT_MODULE_CATALOG.map((item) => item.moduleKey);
@@ -91,8 +107,8 @@ export function isPrivilegedSubscriptionRole(role?: string | null): boolean {
   return PRIVILEGED_ROLES.has(String(role || '').toUpperCase());
 }
 
-export function isSubscriptionExemptCompany(companyId?: number | null): boolean {
-  return SUBSCRIPTION_EXEMPT_COMPANY_IDS.includes(Number(companyId) as 2 | 3);
+export function isSubscriptionExemptCompany(_companyId?: number | null): boolean {
+  return false;
 }
 
 /** Employee-rights keys that can reduce access. Empty means subscription alone decides. */

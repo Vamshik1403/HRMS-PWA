@@ -705,9 +705,16 @@ export default function SubscriptionPage() {
                     <div className="space-y-2">
                       <Label>Validity (Days) *</Label>
                       <Input
-                        type="number"
-                        value={planForm.validityDays}
-                        onChange={(e) => setPlanForm({ ...planForm, validityDays: parseInt(e.target.value) || 0 })}
+                        inputMode="numeric"
+                        value={planForm.validityDays || ""}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, "");
+                          setPlanForm({
+                            ...planForm,
+                            validityDays: digits === "" ? 0 : Number(digits),
+                          });
+                        }}
+                        placeholder="90"
                         required
                       />
                     </div>

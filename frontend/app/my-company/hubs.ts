@@ -101,12 +101,12 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     icon: "solar:user-plus-bold-duotone",
     iconClassName: "text-emerald-700",
     tabs: [
-      { id: "candidates", label: "Candidate List", embed: "new-joiners" },
-      { id: "assessments", label: "Assessments", comingSoon: true },
-      { id: "interviews", label: "Interviews", comingSoon: true },
-      { id: "offers", label: "Offers", comingSoon: true },
-      { id: "onboarding", label: "Onboarding", embed: "new-joiners" },
-      { id: "review", label: "Under Review", comingSoon: true },
+      { id: "candidates", label: "Candidate List", embed: "new-joiners", productModules: ["ONBOARDING_MODULE"] },
+      { id: "assessments", label: "Assessments", comingSoon: true, productModules: ["ONBOARDING_MODULE"] },
+      { id: "interviews", label: "Interviews", comingSoon: true, productModules: ["ONBOARDING_MODULE"] },
+      { id: "offers", label: "Offers", comingSoon: true, productModules: ["ONBOARDING_MODULE"] },
+      { id: "onboarding", label: "Onboarding", embed: "new-joiners", productModules: ["ONBOARDING_MODULE"] },
+      { id: "review", label: "Under Review", comingSoon: true, productModules: ["ONBOARDING_MODULE"] },
     ],
   },
   {
@@ -158,7 +158,7 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     label: "Workflow Management",
     icon: "solar:share-circle-bold-duotone",
     iconClassName: "text-violet-700",
-    tabs: [{ id: "workflows", label: "Approval Workflows", embed: "workflows" }],
+    tabs: [{ id: "workflows", label: "Approval Workflows", embed: "workflows", productModules: ["WORKFLOW_MODULE"] }],
   },
   {
     id: "reimbursement",
@@ -207,8 +207,8 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     icon: "solar:shield-check-bold-duotone",
     iconClassName: "text-emerald-800",
     tabs: [
-      { id: "company-info", label: "Company Information", embed: "company-info" },
-      { id: "compliance", label: "Registrations & Certificates", embed: "compliance" },
+      { id: "company-info", label: "Company Information", embed: "company-info", productModules: ["TAX_COMPLIANCE_MODULE"] },
+      { id: "compliance", label: "Registrations & Certificates", embed: "compliance", productModules: ["TAX_COMPLIANCE_MODULE"] },
     ],
   },
   {
@@ -217,9 +217,9 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     icon: "solar:document-add-bold-duotone",
     iconClassName: "text-indigo-700",
     tabs: [
-      { id: "templates", label: "Document Templates", embed: "document-templates" },
-      { id: "forms", label: "Forms", embed: "forms" },
-      { id: "email", label: "Email Templates", embed: "email-templates" },
+      { id: "templates", label: "Document Templates", embed: "document-templates", productModules: ["DOCUMENTS_MODULE"] },
+      { id: "forms", label: "Forms", embed: "forms", productModules: ["DOCUMENTS_MODULE"] },
+      { id: "email", label: "Email Templates", embed: "email-templates", productModules: ["DOCUMENTS_MODULE"] },
     ],
   },
   {
@@ -245,14 +245,14 @@ export const COMPANY_HUB_TILES: CompanyHubTile[] = [
     label: "CRM",
     icon: "solar:dialog-bold-duotone",
     iconClassName: "text-pink-700",
-    tabs: [{ id: "crm", label: "CRM", comingSoon: true }],
+    tabs: [{ id: "crm", label: "CRM", comingSoon: true, productModules: ["CRM_MODULE"] }],
   },
   {
     id: "assets",
     label: "Asset Management",
     icon: "solar:box-bold-duotone",
     iconClassName: "text-gray-700",
-    tabs: [{ id: "assets", label: "Assets", comingSoon: true }],
+    tabs: [{ id: "assets", label: "Assets", comingSoon: true, productModules: ["ASSET_MANAGEMENT_MODULE"] }],
   },
 ];
 

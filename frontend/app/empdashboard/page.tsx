@@ -22,6 +22,7 @@ import { isWorkingActiveAssignedTask } from "../utils/taskAssignmentRequest";
 import { syncAppBadge } from "@/lib/appBadge";
 import { isCompanyOwnerFlag } from "@/lib/companyAccess";
 import { TASK_MANAGEMENT_ENABLED } from "../config/featureFlags";
+import { isProductHrefAllowed, useProductAccess } from "@/lib/productAccess";
 import { Dialog, DialogContent, DialogTitle, DialogHeader } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -278,6 +279,7 @@ export default function EmpDashboardPage() {
 function EmpDashboardPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  useProductAccess();
   const isPortalDesktop = useEmpPortalDesktop();
   const view = searchParams.get("view");
   const tab = searchParams.get("tab");
@@ -582,6 +584,8 @@ function EmpDashboardPageInner() {
     if (key === "leave") return leaveBadge;
     return 0;
   };
+  const visibleCards = menuCards.filter((card) => isProductHrefAllowed(card.href));
+  const spanLast = visibleCards.length % 2 === 1;
 
   const submitPasswordChange = async () => {
     const currentPassword = passwordForm.currentPassword.trim();
@@ -833,12 +837,14 @@ function EmpDashboardPageInner() {
 
         {/* Menu grid */}
         <div className="grid grid-cols-2 gap-3 mb-4">
-          {menuCards.map((card) => {
+          {visibleCards.map((card, index) => {
             const badge = badgeFor(card.key);
+            const fullWidth = spanLast && index === visibleCards.length - 1;
             return (
               <Link
                 key={card.key}
                 href={card.href}
+                className={fullWidth ? "col-span-2" : undefined}
                 onClick={() => {
                   if (card.key === "notice") {
                     localStorage.setItem("_notice_last_viewed", Date.now().toString());

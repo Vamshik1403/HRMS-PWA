@@ -2157,7 +2157,12 @@ export function GenerateSalaryManagement() {
       dispatchAppRefresh();
     } catch (err) {
       console.error("Save failed:", err);
-      toast.error(messageFromUnknownError(err, "Failed to save. Please try again."));
+      const message = messageFromUnknownError(err, "Failed to save. Please try again.");
+      toast.error(
+        message === "This module is not included in your company's subscription."
+          ? "No subscription plan for salary generation."
+          : message,
+      );
     }
   }
 

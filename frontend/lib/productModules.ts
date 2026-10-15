@@ -14,6 +14,7 @@ export const ATTENDANCE_CORE_MODULE_KEYS = [
   "TRANSFERS_MODULE",
   "EMPLOYEE_MANAGEMENT_MODULE",
   "OFF_BOARDING_MODULE",
+  "ONBOARDING_MODULE",
 ] as const;
 
 export const ADDON_MODULE_KEYS = [
@@ -25,6 +26,8 @@ export const ADDON_MODULE_KEYS = [
   "IM_MODULE",
   "TASK_MODULE",
   "ONFIELD_TASK_MODULE",
+  "WORKFLOW_MODULE",
+  "DOCUMENTS_MODULE",
 ] as const;
 
 export type ProductRouteRule = {
@@ -74,6 +77,11 @@ export const PRODUCT_ROUTE_RULES: ProductRouteRule[] = [
   { prefix: "/my-company/company", anyOf: ["EMPLOYEE_MANAGEMENT_MODULE"], tab: "devices" },
   { prefix: "/my-company/company", anyOf: ["EMPLOYEE_MANAGEMENT_MODULE"], tab: "federal-domain" },
   { prefix: "/my-company/company", anyOf: ["EMPLOYEE_MANAGEMENT_MODULE"], tab: "directory" },
+  { prefix: "/branches", anyOf: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+  { prefix: "/devices", anyOf: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+  { prefix: "/departments", anyOf: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+  { prefix: "/designations", anyOf: ["EMPLOYEE_MANAGEMENT_MODULE"] },
+  { prefix: "/manage-employees", anyOf: ["EMPLOYEE_MANAGEMENT_MODULE"] },
   { prefix: "/federal-domain", anyOf: ["EMPLOYEE_MANAGEMENT_MODULE"] },
   { prefix: "/empNoticeboard", anyOf: ["IM_MODULE"] },
   { prefix: "/employee-memo", anyOf: ["IM_MODULE"] },
@@ -102,6 +110,18 @@ export const PRODUCT_ROUTE_RULES: ProductRouteRule[] = [
   { prefix: "/contractor-rates", anyOf: ["CONTRACTOR_MODULE"] },
   { prefix: "/contractor-payout", anyOf: ["CONTRACTOR_MODULE"] },
   { prefix: "/termination", anyOf: ["OFF_BOARDING_MODULE"] },
+  { prefix: "/my-company/onboarding", anyOf: ["ONBOARDING_MODULE"] },
+  { prefix: "/new-joiners", anyOf: ["ONBOARDING_MODULE"] },
+  { prefix: "/empOnboarding", anyOf: ["ONBOARDING_MODULE"] },
+  { prefix: "/my-company/workflow", anyOf: ["WORKFLOW_MODULE"] },
+  { prefix: "/approval-workflows", anyOf: ["WORKFLOW_MODULE"] },
+  { prefix: "/my-company/documents", anyOf: ["DOCUMENTS_MODULE"] },
+  { prefix: "/document-templates", anyOf: ["DOCUMENTS_MODULE"] },
+  { prefix: "/forms", anyOf: ["DOCUMENTS_MODULE"] },
+  { prefix: "/system-settings/email-templates", anyOf: ["DOCUMENTS_MODULE"] },
+  { prefix: "/my-company/tax", anyOf: ["TAX_COMPLIANCE_MODULE"] },
+  { prefix: "/my-company/crm", anyOf: ["CRM_MODULE"] },
+  { prefix: "/my-company/assets", anyOf: ["ASSET_MANAGEMENT_MODULE"] },
   { prefix: "/attendance-reports", anyOf: ["ADVANCE_REPORTING_MODULE"] },
   { prefix: "/payroll-reports", anyOf: ["ADVANCE_REPORTING_MODULE"] },
   { prefix: "/leave-reports", anyOf: ["ADVANCE_REPORTING_MODULE"] },

@@ -15,7 +15,6 @@ import {
   ClipboardList,
   MessageSquare,
   UserCog,
-  Database,
   CreditCard,
   FileText,
   type LucideIcon,
@@ -243,12 +242,6 @@ export const HRMS_NAVIGATION: NavGroup[] = [
     show: (c) => c.isSuperAdmin || c.isServiceProvider,
     items: [
       { label: "System Users", href: "/system-users", icon: Users, show: always },
-      {
-        label: "Application Modules",
-        href: "/company-modules",
-        icon: Database,
-        show: (c) => c.isSuperAdmin || c.isServiceProvider,
-      },
       {
         label: "Subscriptions",
         href: "/subscription",
