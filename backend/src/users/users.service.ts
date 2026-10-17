@@ -11,6 +11,7 @@ import { UpdateUserDto } from './dto/update-user.dto'
 import { UserRole } from '@prisma/client'
 import * as bcrypt from 'bcrypt'
 import { assertPasswordMeetsPolicy } from '../auth/password-policy'
+import { assertEmailNotInUse } from '../common/email-uniqueness'
 
 @Injectable()
 export class UsersService {
@@ -53,6 +54,7 @@ export class UsersService {
       if (!createUserDto.email?.trim()) {
         throw new BadRequestException('Email is required')
       }
+      await assertEmailNotInUse(this.prisma, [createUserDto.email])
       if (!createUserDto.contactNo?.trim()) {
         throw new BadRequestException('Contact number is required')
       }
@@ -231,6 +233,7 @@ export class UsersService {
       if (!String(nextEmail || '').trim()) {
         throw new BadRequestException('Email is required')
       }
+      await assertEmailNotInUse(this.prisma, [nextEmail], { excludeUserId: id })
       if (!String(nextContact || '').trim()) {
         throw new BadRequestException('Contact number is required')
       }
@@ -453,6 +456,9 @@ export class UsersService {
     const lastName = nameParts.slice(1).join(' ') || null
     const email = String(data.email || '').trim()
     const mobileNo = String(data.mobileNo || '').trim()
+    if (email) {
+      await assertEmailNotInUse(this.prisma, [email], { excludeUserId: userId })
+    }
 
     const [profile] = await this.prisma.$transaction([
       this.prisma.userProfile.upsert({

@@ -25,7 +25,6 @@ import {
   Receipt,
   ScrollText,
   ClipboardList,
-  History,
   DollarSign,
   Fingerprint,
   Link2,
@@ -370,19 +369,6 @@ export const EMP_SIDEBAR_NAVIGATION: EmpSidebarNavGroup[] = [
         href: "/my-company/company?tab=federal-domain",
         icon: Link2,
         companyAccessOnly: true,
-      },
-    ],
-  },
-  {
-    label: "Administration",
-    show: hasAnyCompanyAccess,
-    items: [
-      {
-        id: "admin-system-logs",
-        label: "System Logs",
-        href: "/audit-logs",
-        icon: History,
-        show: () => isCompanyOwnerFlag() || canViewModule("SETTINGS"),
       },
     ],
   },

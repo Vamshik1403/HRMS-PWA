@@ -1808,13 +1808,13 @@ export class TaskProjectsService {
         ],
       },
       select: {
-        id: true,
-        employeeID: true,
-        employeeFirstName: true,
-        employeeLastName: true,
+      id: true,
+      employeeID: true,
+      employeeFirstName: true,
+      employeeLastName: true,
         companyID: true,
         company: { select: { companyName: true } },
-        departments: { select: { departmentName: true } },
+      departments: { select: { departmentName: true } },
       },
       orderBy: { employeeFirstName: 'asc' },
     });

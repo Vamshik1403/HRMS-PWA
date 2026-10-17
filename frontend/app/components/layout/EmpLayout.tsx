@@ -32,6 +32,11 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Eye, EyeOff } from "lucide-react";
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordRules";
+import {
+  clearTemporaryLoginPassword,
+  employeeMustChangePassword,
+  readTemporaryLoginPassword,
+} from "@/lib/tempPasswordSession";
 import { PasswordRuleHints } from "@/app/components/ui/password-rule-hints";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -51,7 +56,14 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
   const [showProfile, setShowProfile] = useState(false);
 
   const handleChangePassword = async () => {
-    if (!pwdForm.oldPassword || !pwdForm.newPassword) { toast.error("All fields are required"); return; }
+    const currentPassword = mustSetFirstPassword
+      ? readTemporaryLoginPassword()
+      : pwdForm.oldPassword;
+    if (mustSetFirstPassword && !currentPassword) {
+      toast.error("Sign in again to change your temporary password.");
+      return;
+    }
+    if ((!mustSetFirstPassword && !pwdForm.oldPassword) || !pwdForm.newPassword) { toast.error("All fields are required"); return; }
     if (!isPasswordValid(pwdForm.newPassword)) { toast.error(PASSWORD_POLICY_MESSAGE); return; }
     if (pwdForm.newPassword !== pwdForm.confirmPassword) { toast.error("Passwords do not match"); return; }
     try {
@@ -59,18 +71,31 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
       const empId = user?.employee?.id;
       if (!empId) { toast.error("Employee not found"); return; }
+      const token = localStorage.getItem("token") || localStorage.getItem("accessToken");
       const res = await fetch(`/backend/manage-emp/${empId}/change-password`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ oldPassword: currentPassword, newPassword: pwdForm.newPassword }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
         throw new Error(err?.message || "Failed to change password");
       }
-      toast.success("Password changed successfully");
       setShowChangePassword(false);
       setPwdForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+      if (mustSetFirstPassword) {
+        clearTemporaryLoginPassword();
+        toast.success("Password changed successfully. Please login again.");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+        return;
+      }
+      toast.success("Password changed successfully");
     } catch (err: any) {
       toast.error(err.message || "Failed to change password");
     } finally {
@@ -79,6 +104,7 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
   };
 
   const [empUser, setEmpUser] = useState<any>(null);
+  const mustSetFirstPassword = employeeMustChangePassword(empUser);
 
   useEffect(() => {
     try {
@@ -236,6 +262,7 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                     <DropdownMenuItem
                       className="cursor-pointer text-red-600 focus:text-red-600"
                       onClick={() => {
+                        clearTemporaryLoginPassword();
                         localStorage.removeItem("accessToken");
                         localStorage.removeItem("user");
                         try {
@@ -265,6 +292,11 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
             <DialogTitle>Change Password</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {mustSetFirstPassword ? (
+              <p className="text-sm text-gray-600">
+                Choose a new password. You will sign in again after it is saved.
+              </p>
+            ) : (
             <div>
               <Label>Current Password</Label>
               <div className="relative">
@@ -274,6 +306,7 @@ export default function EmpLayout({ children }: EmpLayoutProps) {
                 </button>
               </div>
             </div>
+            )}
             <div>
               <Label>New Password</Label>
               <div className="relative">

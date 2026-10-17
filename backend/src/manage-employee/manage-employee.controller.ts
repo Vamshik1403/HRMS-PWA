@@ -120,8 +120,10 @@ export class ManageEmployeeController {
 
 
   @Get(':id/joining-form')
+  @UseGuards(AuthGuard('jwt'))
   async downloadJoiningForm(
     @Param('id', ParseIntPipe) id: number,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     try {
@@ -132,9 +134,11 @@ export class ManageEmployeeController {
         'Content-Length': pdf.length,
       });
       res.send(pdf);
+      await this.service.logJoiningFormDownload(id, req, true);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Failed to generate joining form PDF';
+      await this.service.logJoiningFormDownload(id, req, false, message);
       res.status(500).json({ message });
     }
   }

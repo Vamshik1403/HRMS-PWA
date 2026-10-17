@@ -277,6 +277,65 @@ export class MailService {
     }
   }
 
+  /** Login details go only to the employee. Do not copy a manager; the body contains a password. */
+  async sendEmployeeTemporaryLogin(params: {
+    to: string;
+    employeeName: string;
+    username: string;
+    temporaryPassword: string;
+    companyName?: string | null;
+    approvalPending?: boolean;
+  }): Promise<boolean> {
+    const transporter = this.getTransporter();
+    const to = String(params.to || '').trim();
+    if (!transporter) {
+      this.logger.warn('SMTP not configured; skipping temporary login email');
+      return false;
+    }
+    if (!to || !params.temporaryPassword || !params.username) return false;
+
+    const escapeHtml = (value: string) =>
+      value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    const companyName = String(params.companyName || '').trim() || 'OpenHRM';
+    const { from: smtpFrom } = this.smtpConfig();
+    const fromAddress = this.extractSmtpEmail(smtpFrom);
+    const pendingLine = params.approvalPending
+      ? '<p>Your login stays inactive until onboarding approval is complete.</p>'
+      : '';
+    const subject = this.applyCompanyBranding(
+      `[${companyName}] Your login details`,
+      companyName,
+    );
+    const html = this.applyCompanyBranding(
+      `<p>Hello ${escapeHtml(params.employeeName || 'there')},</p>
+<p>Your login has been created.</p>
+<p><strong>Username (Employee ID):</strong> ${escapeHtml(params.username)}<br/>
+<strong>Temporary password:</strong> ${escapeHtml(params.temporaryPassword)}</p>
+<p>Sign in and you will be asked to choose a new password.</p>
+${pendingLine}`,
+      companyName,
+    );
+
+    try {
+      await transporter.sendMail({
+        from: { name: companyName, address: fromAddress },
+        to,
+        subject,
+        html,
+      });
+      this.logger.log(`Temporary login email sent to ${to}`);
+      return true;
+    } catch (err) {
+      this.logger.error(
+        `Failed to send temporary login email to ${to}: ${String(err)}`,
+      );
+      return false;
+    }
+  }
+
   /** Email daily backup ZIP (all sectional SQL files) to the configured admin address. */
   async sendDailyBackupEmail(params: {
     dateLabel: string;

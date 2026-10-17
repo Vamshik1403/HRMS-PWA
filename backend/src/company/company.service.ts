@@ -26,6 +26,7 @@ import {
   limitPermissionsToPlan,
   loadEmployeePermissions,
 } from '../common/employee-permission.util';
+import { assertEmailNotInUse } from '../common/email-uniqueness';
 import {
   OFF_BOARDING_MODULE,
   ONBOARDING_MODULE,
@@ -161,19 +162,7 @@ export class CompanyService {
   }
 
   private async assertEmailAvailable(email: string, excludeEmployeeId?: number) {
-    const existing = await this.prisma.manageEmployee.findFirst({
-      where: {
-        ...this.liveEmployeeScope(excludeEmployeeId),
-        OR: [
-          { businessEmail: { equals: email, mode: 'insensitive' } },
-          { personalEmail: { equals: email, mode: 'insensitive' } },
-        ],
-      },
-      select: { id: true },
-    });
-    if (existing) {
-      throw new ConflictException('Email already exists');
-    }
+    await assertEmailNotInUse(this.prisma, [email], { excludeEmployeeId });
   }
 
   private async assertMobileAvailable(mobile: string, excludeEmployeeId?: number) {

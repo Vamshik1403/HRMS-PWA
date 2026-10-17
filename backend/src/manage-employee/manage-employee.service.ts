@@ -10,6 +10,9 @@ import * as bcrypt from 'bcrypt';
 import { ApprovalEngineService } from '../approval-workflow/approval-engine.service';
 import { assertPasswordMeetsPolicy } from '../auth/password-policy';
 import { GoogleMapsService } from '../google-maps/google-maps.service';
+import { MailService } from '../mail/mail.service';
+import { assertEmailNotInUse } from '../common/email-uniqueness';
+import { employeeFieldChanges } from './employee-audit-diff';
 
 @Injectable()
 export class ManageEmployeeService {
@@ -21,6 +24,7 @@ export class ManageEmployeeService {
     private readonly auditLog: AuditLogService,
     private readonly approvalEngine: ApprovalEngineService,
     private readonly googleMaps: GoogleMapsService,
+    private readonly mail: MailService,
   ) { }
 
   private async applyWfhHomeGeocode(
@@ -169,19 +173,65 @@ export class ManageEmployeeService {
 
   // Helper method to verify password
   async verifyPassword(plainPassword: string, hashedPassword: string): Promise<boolean> {
-    return bcrypt.compare(plainPassword, hashedPassword);
+    return this.passwordMatches(plainPassword, hashedPassword);
   }
 
-  private digitsOnly(value?: string | null): string {
-    return String(value || '').replace(/\D/g, '');
+  /** Same check as login, including a digits-only match for a formatted mobile password. */
+  private async passwordMatches(plain: string, hash: string): Promise<boolean> {
+    if (await bcrypt.compare(plain, hash)) return true;
+    const digits = String(plain || '').replace(/\D/g, '');
+    if (digits && digits !== plain) {
+      return bcrypt.compare(digits, hash);
+    }
+    return false;
   }
 
   private employeeCodeUsername(employeeID?: string | null): string {
     return String(employeeID || '').trim();
   }
 
-  private employeeInitialPassword(personalPhoneNo?: string | null): string {
-    return this.digitsOnly(personalPhoneNo) || String(personalPhoneNo || '').trim();
+  private employeeLoginEmail(row?: {
+    businessEmail?: string | null;
+    personalEmail?: string | null;
+  } | null): string {
+    return String(row?.businessEmail || '').trim() || String(row?.personalEmail || '').trim();
+  }
+
+  private async emailTemporaryLogin(row: {
+    id?: number;
+    employeeID?: string | null;
+    employeeFirstName?: string | null;
+    employeeLastName?: string | null;
+    businessEmail?: string | null;
+    personalEmail?: string | null;
+    company?: { companyName?: string | null } | null;
+    initialPassword?: string | null;
+    approval?: { required?: boolean; credentialsActive?: boolean };
+    employeeCredentials?: { isActive?: boolean } | null;
+    onboardingApprovalStatus?: string | null;
+  } | null): Promise<boolean> {
+    const to = this.employeeLoginEmail(row);
+    const temporaryPassword = String(row?.initialPassword || '');
+    const username = this.employeeCodeUsername(row?.employeeID);
+    if (!to || !temporaryPassword || !username) return false;
+    const approvalPending =
+      row?.approval?.credentialsActive === false ||
+      (row?.approval == null && row?.employeeCredentials?.isActive === false) ||
+      (row?.onboardingApprovalStatus != null &&
+        row.onboardingApprovalStatus !== 'APPROVED' &&
+        row.employeeCredentials?.isActive === false);
+    try {
+      return await this.mail.sendEmployeeTemporaryLogin({
+        to,
+        employeeName: row ? this.employeeDisplayName(row) : username,
+        username,
+        temporaryPassword,
+        companyName: row?.company?.companyName,
+        approvalPending,
+      });
+    } catch {
+      return false;
+    }
   }
 
   private generateTemporaryPassword(): string {
@@ -628,6 +678,10 @@ export class ManageEmployeeService {
     if (forcedCompanyID && !this.toPositiveId(companyID)) {
       throw new BadRequestException('Company is required to save an employee');
     }
+    await assertEmailNotInUse(this.prisma, [
+      scalars.businessEmail,
+      scalars.personalEmail,
+    ]);
     await this.assertMasterDataBelongsToCompany({
       companyID,
       ...this.masterDataIdsFromEmployeeInput({
@@ -964,16 +1018,14 @@ export class ManageEmployeeService {
       let plainInitialPassword: string | null = null;
 
       const loginUsername = this.employeeCodeUsername(employee.employeeID);
-      const initialPassword = this.employeeInitialPassword(scalars.personalPhoneNo);
 
-      if ((scalars.personalPhoneNo || scalars.personalEmail || scalars.businessEmail) &&
-          (!loginUsername || !initialPassword)) {
+      if (!loginUsername && !employee.isCompanyOwner) {
         throw new BadRequestException(
-          'Employee ID and mobile number are required to create login credentials',
+          'Employee ID is required to create login credentials',
         );
       }
 
-      if (loginUsername && initialPassword && !employee.isCompanyOwner) {
+      if (loginUsername && !employee.isCompanyOwner) {
         const existingCred = await tx.employeeCredentials.findUnique({
           where: { employeeID: employee.id }, 
         });
@@ -988,7 +1040,7 @@ export class ManageEmployeeService {
             );
           }
 
-          plainInitialPassword = initialPassword;
+          plainInitialPassword = this.generateTemporaryPassword();
           const hashedPassword = await this.hashPassword(plainInitialPassword);
 
           await tx.employeeCredentials.create({
@@ -1081,6 +1133,7 @@ export class ManageEmployeeService {
       };
     });
 
+    const createdName = created ? this.employeeDisplayName(created) : 'Employee';
     await this.auditLog.logFromRequest(req, {
       action: 'CREATE',
       module: 'EMPLOYEE',
@@ -1088,14 +1141,17 @@ export class ManageEmployeeService {
       entityName: created ? this.employeeDisplayName(created) : undefined,
       newData: created
         ? {
+            description: `Created employee ${createdName}`,
             employeeID: created.employeeID,
-            employeeFirstName: created.employeeFirstName,
-            employeeLastName: created.employeeLastName,
+            name: createdName,
+            email: this.employeeLoginEmail(created),
+            companyID: created.companyID,
           }
         : undefined,
     });
 
-    return created;
+    const loginEmailSent = await this.emailTemporaryLogin(created);
+    return created ? { ...created, loginEmailSent } : created;
   }
 
 
@@ -2139,6 +2195,10 @@ async findOne(id: number) {
         `Employee ${id} not found`,
       );
     }
+    await assertEmailNotInUse(this.prisma, [
+      scalars.businessEmail,
+      scalars.personalEmail,
+    ], { excludeEmployeeId: id });
     await this.applyWfhHomeGeocode(scalars as Record<string, any>, beforeUpdate);
 
     const forcedCompanyID = await this.tenantForcedCompanyID(req);
@@ -2326,16 +2386,11 @@ async findOne(id: number) {
         });
       }
 
-        // Create credentials on first save from employee ID + mobile. Do not
-        // overwrite an existing login username when the employee is updated.
+        // Create credentials on first save from the employee ID. Do not
+        // overwrite an existing login password when the employee is updated.
         const nextLoginUsername = this.employeeCodeUsername(
           oldData?.employeeID,
         );
-        const nextPhone =
-          scalars.personalPhoneNo !== undefined
-            ? scalars.personalPhoneNo
-            : oldData?.personalPhoneNo;
-        const nextInitialPassword = this.employeeInitialPassword(nextPhone);
 
         if (
           nextLoginUsername ||
@@ -2362,7 +2417,6 @@ async findOne(id: number) {
 
           } else if (
             nextLoginUsername &&
-            nextInitialPassword &&
             !oldData?.isCompanyOwner
           ) {
             const taken = await tx.employeeCredentials.findFirst({
@@ -2374,7 +2428,7 @@ async findOne(id: number) {
               );
             }
 
-            plainInitialPassword = nextInitialPassword;
+            plainInitialPassword = this.generateTemporaryPassword();
             const hashedPassword = await this.hashPassword(plainInitialPassword);
 
             const employeeApprovalState =
@@ -2953,20 +3007,27 @@ async findOne(id: number) {
         };
     });
 
-    await this.auditLog.logFromRequest(req, {
-      action: 'UPDATE',
-      module: 'EMPLOYEE',
-      entityId: id,
-      entityName: this.employeeDisplayName(beforeUpdate),
-      oldData: {
-        employeeID: beforeUpdate.employeeID,
-        employeeFirstName: beforeUpdate.employeeFirstName,
-        employeeLastName: beforeUpdate.employeeLastName,
-      },
-      newData: dto,
-    });
+    const employeeChanges = employeeFieldChanges(
+      beforeUpdate as unknown as Record<string, unknown>,
+      dto as unknown as Record<string, unknown>,
+    );
+    if (employeeChanges.length > 0) {
+      await this.auditLog.logFromRequest(req, {
+        action: 'UPDATE',
+        module: 'EMPLOYEE',
+        entityId: id,
+        entityName: this.employeeDisplayName(beforeUpdate),
+        newData: {
+          description: `Updated employee ${this.employeeDisplayName(beforeUpdate)}`,
+          changes: employeeChanges,
+        },
+      });
+    }
 
-    return updated;
+    const loginEmailSent = updated?.initialPassword
+      ? await this.emailTemporaryLogin(updated)
+      : false;
+    return updated ? { ...updated, loginEmailSent } : updated;
   }
 
   async getEmployeeDocuments(employeeID: number) {
@@ -3093,6 +3154,41 @@ async findOne(id: number) {
     return { success: true };
   }
 
+  async logJoiningFormDownload(
+    id: number,
+    req: Request | undefined,
+    success: boolean,
+    failureReason?: string,
+  ) {
+    const emp = await this.prisma.manageEmployee.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        employeeID: true,
+        employeeFirstName: true,
+        employeeLastName: true,
+        businessEmail: true,
+        personalEmail: true,
+      },
+    });
+    const name = emp ? this.employeeDisplayName(emp) : `Employee ${id}`;
+    await this.auditLog.logFromRequest(req, {
+      action: 'DOWNLOAD',
+      module: 'EMPLOYEE',
+      entityId: id,
+      entityName: name,
+      success,
+      failureReason: failureReason ?? null,
+      newData: {
+        description: success
+          ? `Downloaded joining form for ${name}`
+          : `Joining form download failed for ${name}`,
+        employeeID: emp?.employeeID ?? null,
+        email: emp ? this.employeeLoginEmail(emp) : null,
+      },
+    });
+  }
+
 async remove(id: number, req?: Request) {
   try {
       const existing =
@@ -3102,6 +3198,7 @@ async remove(id: number, req?: Request) {
           },
 
           include: {
+            company: { select: { companyName: true } },
             _count: {
               select: {
                 onboardingApprovalRequests: true,
@@ -3222,15 +3319,20 @@ async remove(id: number, req?: Request) {
       this.prisma.manageEmployee.delete({ where: { id } }),
     ]);
 
+    const deletedName = this.employeeDisplayName(existing);
     await this.auditLog.logFromRequest(req, {
       action: 'DELETE',
       module: 'EMPLOYEE',
       entityId: id,
-      entityName: this.employeeDisplayName(existing),
+      entityName: deletedName,
       oldData: {
+        description: `Deleted employee ${deletedName}`,
+        id,
         employeeID: existing.employeeID,
-        employeeFirstName: existing.employeeFirstName,
-        employeeLastName: existing.employeeLastName,
+        name: deletedName,
+        email: this.employeeLoginEmail(existing),
+        companyID: existing.companyID,
+        companyName: existing.company?.companyName ?? null,
       },
     });
 

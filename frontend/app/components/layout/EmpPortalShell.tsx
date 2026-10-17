@@ -19,6 +19,11 @@ import { empPayoutHrefForPeriod } from "@/app/utils/empPayslipApi";
 import { EmpMarkoutReminderBanner } from "@/app/components/emp/EmpMarkoutReminderBanner";
 import { toast } from "sonner";
 import { isPasswordValid, PASSWORD_POLICY_MESSAGE } from "@/lib/passwordRules";
+import {
+  clearTemporaryLoginPassword,
+  employeeMustChangePassword,
+  readTemporaryLoginPassword,
+} from "@/lib/tempPasswordSession";
 import { PasswordRuleHints } from "@/app/components/ui/password-rule-hints";
 import { ensureFetchRefreshPatch } from "@/app/utils/patchFetchForRefresh";
 import { useEmpManagerScope } from "@/app/hooks/useEmpManagerScope";
@@ -344,8 +349,16 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
     window.dispatchEvent(new Event("emp-theme-change"));
   };
 
+  const mustSetFirstPassword = employeeMustChangePassword(empUser);
   const handleChangePassword = async () => {
-    if (!pwdForm.oldPassword || !pwdForm.newPassword) {
+    const currentPassword = mustSetFirstPassword
+      ? readTemporaryLoginPassword()
+      : pwdForm.oldPassword;
+    if (mustSetFirstPassword && !currentPassword) {
+      toast.error("Sign in again to change your temporary password.");
+      return;
+    }
+    if ((!mustSetFirstPassword && !pwdForm.oldPassword) || !pwdForm.newPassword) {
       toast.error("All fields are required");
       return;
     }
@@ -364,18 +377,31 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
         toast.error("Employee not found");
         return;
       }
+      const token = localStorage.getItem("token") || localStorage.getItem("accessToken");
       const res = await fetch(`/backend/manage-emp/${empId}/change-password`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ oldPassword: pwdForm.oldPassword, newPassword: pwdForm.newPassword }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ oldPassword: currentPassword, newPassword: pwdForm.newPassword }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => null);
         throw new Error(err?.message || "Failed to change password");
       }
-      toast.success("Password changed successfully");
       setShowChangePassword(false);
       setPwdForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+      if (mustSetFirstPassword) {
+        clearTemporaryLoginPassword();
+        toast.success("Password changed successfully. Please login again.");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.location.href = "/login";
+        return;
+      }
+      toast.success("Password changed successfully");
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Failed to change password");
     } finally {
@@ -411,6 +437,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
           headerPhotoUrl={headerPhotoUrl}
           onChangePassword={() => setShowChangePassword(true)}
           onLogout={() => {
+            clearTemporaryLoginPassword();
             localStorage.removeItem("accessToken");
             localStorage.removeItem("token");
             localStorage.removeItem("user");
@@ -461,6 +488,11 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
             <DialogTitle>Change Password</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {mustSetFirstPassword ? (
+              <p className="text-sm text-gray-600">
+                Choose a new password. You will sign in again after it is saved.
+              </p>
+            ) : (
             <div>
               <Label>Current Password</Label>
               <div className="relative">
@@ -480,6 +512,7 @@ export default function EmpPortalShell({ children, hideBottomNav = false }: EmpP
                 </button>
               </div>
             </div>
+            )}
             <div>
               <Label>New Password</Label>
               <div className="relative">

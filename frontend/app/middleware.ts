@@ -1,23 +1,23 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { isDeniedTenantsRole, isSuperadminOnlyPath, isTenantsPath } from '@/lib/superadminRoutes'
 
-function decodeJwtExp(token: string): number | null {
+function decodeJwt(token: string): { exp?: number; role?: string } | null {
   try {
     const parts = token.split('.')
     if (parts.length < 2) return null
-    const payload = JSON.parse(
-      Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'),
-    )
-    return typeof payload.exp === 'number' ? payload.exp : null
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
+    const payload = JSON.parse(atob(padded))
+    return payload && typeof payload === 'object' ? payload : null
   } catch {
     return null
   }
 }
 
-function isTokenValid(token: string): boolean {
-  const exp = decodeJwtExp(token)
-  if (exp == null) return false
-  return exp * 1000 > Date.now()
+function isTokenValid(payload: { exp?: number } | null): boolean {
+  if (!payload || typeof payload.exp !== 'number') return false
+  return payload.exp * 1000 > Date.now()
 }
 
 export function middleware(req: NextRequest) {
@@ -47,29 +47,38 @@ export function middleware(req: NextRequest) {
     req.cookies.get('accessToken')?.value ||
     req.headers.get('Authorization')?.replace('Bearer ', '') ||
     null
+  const payload = token ? decodeJwt(token) : null
+  const valid = isTokenValid(payload)
 
   const isAuthPage =
     pathname.startsWith('/login') ||
     pathname === '/' ||
+    pathname === '/access-denied' ||
     pathname === '/terms-of-use' ||
     pathname === '/privacy-policy' ||
     pathname === '/sla'
 
-  if (!token || !isTokenValid(token)) {
+  if (!token || !valid) {
     if (isAuthPage) {
       const res = NextResponse.next()
-      if (token && !isTokenValid(token)) {
+      if (token && !valid) {
         res.cookies.set('accessToken', '', { path: '/', maxAge: 0 })
       }
       return res
     }
-    const res = NextResponse.redirect(new URL('/login', req.url))
+    const login = new URL('/login', req.url)
+    login.searchParams.set('next', pathname)
+    const res = NextResponse.redirect(login)
     res.cookies.set('accessToken', '', { path: '/', maxAge: 0 })
     return res
   }
 
-  if (token && isAuthPage) {
-    return NextResponse.next()
+  const role = String(payload?.role || '').toUpperCase()
+  if (isSuperadminOnlyPath(pathname) && role !== 'SUPERADMIN') {
+    return NextResponse.redirect(new URL('/access-denied', req.url))
+  }
+  if (isTenantsPath(pathname) && isDeniedTenantsRole(role)) {
+    return NextResponse.redirect(new URL('/access-denied', req.url))
   }
 
   return NextResponse.next()

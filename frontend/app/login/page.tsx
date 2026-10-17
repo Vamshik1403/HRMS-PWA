@@ -18,6 +18,12 @@ import {
 } from '@/lib/companyAccess'
 import { preloadHeroImages } from '@/app/components/emp/desktop/HeroBackground'
 import { clearActiveCompanySession, setSidebarContext } from '@/app/utils/sidebarContext'
+import { isDeniedTenantsRole, isSuperadminOnlyPath, isTenantsPath, safeNextPath } from '@/lib/superadminRoutes'
+import {
+  clearTemporaryLoginPassword,
+  employeeMustChangePassword,
+  rememberTemporaryLoginPassword,
+} from '@/lib/tempPasswordSession'
 
 function applyLoginCompanyContext(user: any) {
   clearActiveCompanySession()
@@ -169,6 +175,12 @@ export default function LoginPage() {
   }, [loginOtpToken, otpExpiresAt])
 
   const finishAuthenticatedSession = async (accessToken: string, basicUser: any) => {
+    const isEmployee = basicUser?.type === "employee" || basicUser?.role === "EMPLOYEE";
+    if (isEmployee && employeeMustChangePassword(basicUser)) {
+      rememberTemporaryLoginPassword(password);
+    } else {
+      clearTemporaryLoginPassword();
+    }
     clearLegacyEmpPhoto()
     clearPageCache('empProfileData')
     clearPageCachesByPrefix('empNotifFeed')
@@ -213,7 +225,12 @@ export default function LoginPage() {
       }
       applyLoginCompanyContext(sessionUser)
       preloadHeroImages(true)
-      router.push('/empdashboard')
+      const requested = safeNextPath(new URLSearchParams(window.location.search).get('next'))
+      router.push(
+        requested && (isSuperadminOnlyPath(requested) || isTenantsPath(requested))
+          ? '/access-denied'
+          : '/empdashboard',
+      )
       return
     }
 
@@ -238,6 +255,15 @@ export default function LoginPage() {
       localStorage.setItem('user', JSON.stringify(completeUser))
       applyLoginCompanyContext(completeUser)
       const role = String(completeUser.role || '').toUpperCase()
+      const requested = safeNextPath(new URLSearchParams(window.location.search).get('next'))
+      if (requested && isSuperadminOnlyPath(requested)) {
+        router.push(role === 'SUPERADMIN' ? requested : '/access-denied')
+        return
+      }
+      if (requested && isTenantsPath(requested)) {
+        router.push(isDeniedTenantsRole(role) ? '/access-denied' : requested)
+        return
+      }
       if (role === 'SUPERADMIN') {
         router.push('/superdashboard')
       } else if (isCompanyAdminLikeRole(role)) {
@@ -252,6 +278,15 @@ export default function LoginPage() {
       localStorage.setItem('user', JSON.stringify(basicUser))
       applyLoginCompanyContext(basicUser)
       const role = String(basicUser.role || '').toUpperCase()
+      const requested = safeNextPath(new URLSearchParams(window.location.search).get('next'))
+      if (requested && isSuperadminOnlyPath(requested)) {
+        router.push(role === 'SUPERADMIN' ? requested : '/access-denied')
+        return
+      }
+      if (requested && isTenantsPath(requested)) {
+        router.push(isDeniedTenantsRole(role) ? '/access-denied' : requested)
+        return
+      }
       if (role === 'SUPERADMIN') {
         router.push('/superdashboard')
       } else if (isCompanyAdminLikeRole(role)) {

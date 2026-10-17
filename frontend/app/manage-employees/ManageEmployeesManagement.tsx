@@ -111,6 +111,7 @@ interface ManageEmployeeCreateResponse {
   employeeLastName?: string | null;
   onboardingApprovalStatus?: OnboardingApprovalStatus;
   initialPassword?: string | null;
+  loginEmailSent?: boolean;
   approval?: EmployeeApprovalResponse;
 }
 
@@ -3360,6 +3361,14 @@ const addCombinedDevMap = () => {
       if (wasEditing) {
         toast.success(
           "Employee updated successfully",
+          saveResult?.initialPassword
+            ? {
+                description: saveResult?.loginEmailSent
+                  ? "Login details were emailed to the employee. They must change the temporary password on first login."
+                  : "No email is on file. Use the key icon to share the employee ID and temporary password.",
+                duration: 6000,
+              }
+            : undefined,
         );
       } else if (
         approvalRequired &&
@@ -3374,8 +3383,11 @@ const addCombinedDevMap = () => {
             ? `Employee created and submitted for approval through "${workflowName}"`
             : "Employee created and submitted for approval",
           {
-            description:
-              "Employee login will remain inactive until final approval.",
+            description: saveResult?.loginEmailSent
+              ? "Employee login will remain inactive until final approval. Employee created. Login details were emailed to the employee."
+              : saveResult?.initialPassword
+                ? "Employee login will remain inactive until final approval. Employee created. No email is on file. Use the key icon to share the employee ID and temporary password."
+                : "Employee login will remain inactive until final approval.",
             duration: 6000,
           },
         );
@@ -3383,10 +3395,11 @@ const addCombinedDevMap = () => {
         toast.success(
           "Employee created and approved successfully",
           {
-            description:
-              saveResult?.initialPassword
-                ? "Employee credentials are active. The initial password is the employee mobile number."
-                : "No matching conditional approval workflow was required.",
+            description: saveResult?.initialPassword
+              ? saveResult?.loginEmailSent
+                ? "Employee created. Login details were emailed to the employee."
+                : "Employee created. No email is on file. Use the key icon to share the employee ID and temporary password."
+              : "Employee created. No matching conditional approval workflow was required.",
             duration: 6000,
           },
         );

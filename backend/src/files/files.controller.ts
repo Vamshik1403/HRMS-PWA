@@ -1,4 +1,5 @@
-import { Controller, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Controller, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
@@ -9,6 +10,7 @@ function filenameBuilder(_: any, file: Express.Multer.File, cb: (err: any, filen
 }
 
 @Controller('files')
+@UseGuards(AuthGuard('jwt'))
 export class FilesController {
   @Post('upload')
   @UseInterceptors(
