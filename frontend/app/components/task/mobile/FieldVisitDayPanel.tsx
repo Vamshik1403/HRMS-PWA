@@ -285,13 +285,12 @@ export function FieldVisitDayPanel({ user }: { user: CurrentUserLike | null | un
     return onPhoto(checkType, file, location);
   };
 
-  if (!loaded || !user) return null;
+  if (!loaded || !user || !hasVisitToday) return null;
 
   return (
     <>
       <div className="px-3 pt-3 space-y-2">
-        {hasVisitToday
-          ? visits.map((visit, index) => {
+        {visits.map((visit, index) => {
               const compliance = visitComplianceCopy(visit.complianceStatus);
               const sequence = visit.visitSequence || index + 1;
               const outLabel = visit.signOutForTheDay ? "Sign Out for the Day" : "Check-out";
@@ -338,13 +337,7 @@ export function FieldVisitDayPanel({ user }: { user: CurrentUserLike | null | un
                   </div>
                 </div>
               );
-            })
-          : (
-            <div className="rounded-2xl bg-white border border-gray-100 shadow-sm p-3">
-              <p className="font-semibold text-gray-900">No site visit today</p>
-              <p className="text-[12px] text-gray-500 mt-1">Use Mark In on Home when you are at the office. Site Check-in appears here only for an assigned visit.</p>
-            </div>
-          )}
+            })}
       </div>
       {exception ? (
         <>
